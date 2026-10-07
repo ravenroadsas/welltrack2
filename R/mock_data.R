@@ -1,7 +1,7 @@
 # Mock data for the UI mockup ------------------------------------------------------
 #
 # Generates a coherent synthetic portfolio (opportunities at every step, with
-# streams, workstreams, risks, decisions, history and an activity log) so the
+# streams, workstreams, risks, decisions, history) so the
 # interface can be reviewed with realistic content. Replace with source-system
 # loaders once the UI is agreed.
 
@@ -232,27 +232,6 @@ wt_mock_data <- function(cfg, n = 48, seed = 42, now = as.POSIXct("2026-10-07 08
     risk = bind(risks),
     decision = bind(decs),
     gate_check = bind(gchk),
-    change_request = bind(chg),
-    activity_log = wt_mock_activity(cfg, opp_df, users, now)
+    change_request = bind(chg)
   )
-}
-
-#' Mock activity log (raw inputs already mapped to phases)
-#' @keywords internal
-wt_mock_activity <- function(cfg, opps, users, now) {
-  inputs <- c("nav", "pipeline-view", "pipeline-open_opp", "mywork-open_item", "opp-select", "opp-tabs",
-              "opp-stream_status", "opp-ws_status", "opp-crit_confirm", "decisions-select", "decisions-decide_submit",
-              "stats-group_by", "newopp-submit")
-  probs <- c(.18, .1, .1, .08, .1, .1, .08, .06, .06, .05, .03, .04, .02)
-  rows <- lapply(seq_len(120), function(s) {
-    u <- sample(users$user, 1)
-    t0 <- now - stats::runif(1, 0, 60) * 86400
-    k <- sample(4:14, 1)
-    ids <- sample(inputs, k, replace = TRUE, prob = probs)
-    data.frame(
-      ts = t0 + cumsum(stats::rexp(k, 1 / 40)), session_id = sprintf("S%04d", s), user = u,
-      input_id = ids, value = "", opp_id = sample(opps$opp_id, 1),
-      phase = wt_map_activity_phase(ids, cfg), stringsAsFactors = FALSE)
-  })
-  do.call(rbind, rows)
 }

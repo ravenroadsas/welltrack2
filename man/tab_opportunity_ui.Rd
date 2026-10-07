@@ -10,8 +10,7 @@ tab_opportunity_ui(id)
 \item{id}{Module id.}
 }
 \description{
-One shared object per intervention; every discipline contributes here.
-Header (key numbers) + decision-thread stepper + section tabs + assistant
-status panel (decision and exception first, not a task list).
+One shared record per intervention: header with key numbers, the
+decision-thread stepper, a few section tabs and a case-status panel.
 }
 \keyword{internal}

@@ -16,5 +16,6 @@ app_server(cfg, con, users)
 \description{
 Builds the shared \code{app} context passed to every tab module:
 config, connection, reactive data, current user, navigation helpers.
+Preview edition: read-only, the UI never writes to the database.
 }
 \keyword{internal}

@@ -12,6 +12,6 @@ tab_pipeline_ui(id, cfg)
 \item{cfg}{Config list.}
 }
 \description{
-Portfolio along the decision thread: board (one column per step) or table.
+Portfolio along the decision thread: one board column per step.
 }
 \keyword{internal}

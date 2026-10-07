@@ -12,7 +12,6 @@ tab_stats_ui(id, cfg)
 \item{cfg}{Config list.}
 }
 \description{
-Time per process step, flow segments, bottlenecks, WIP ageing and value
-realization. Filters in one row above the charts.
+Time spent per process step against its target, and current work in progress.
 }
 \keyword{internal}

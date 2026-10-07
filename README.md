@@ -1,152 +1,45 @@
-# WellTrack 2.0: UI mockup
+# WellTrack 2.0: essential preview
 
-A Shiny app, built as an R package, for the **decision-centric Well Intervention process**: workover, well service and initial completion.
+This is a trimmed, **read-only** version of the WellTrack 2.0 mockup, made for a first session with end users. It shows the core idea (one shared record per intervention, moving through the decision thread with clear gates) without showing the full roadmap or suggesting that a working tool is days away.
 
-> **Status: UI/UX mockup for review.** Data is synthetic. A few interactions marked **LIVE** write to an in-memory DuckDB so the flow can be tried: recording a decision, confirming gate evidence, updating a stream or workstream, and creating an opportunity. Everything else is read-only.
+The full mockup is on branch `claude/welltrack-2-shiny-mockup-3w7t0d`. Both branches share the same process logic, YAML config and data layer. Only the UI differs.
 
 ```r
-# run locally
-pkgload::load_all(); run_app()          # or: shiny::runApp()  (uses app.R)
-devtools::test()                        # 129 unit tests
+pkgload::load_all(); run_app()     # or shiny::runApp()
+devtools::test()
 ```
 
-Use the user selector at the top right to **switch accounts**. The same screens change by role: try `Laura Gómez` (Asset Manager) to sign a D2, `Diana Mejía` (ALS) to update a stream, or `Juan Morales` (Integrator).
+## What users see
 
----
-
-## 1. The process the UI follows
-
-The UI follows the **decision thread** from the process document. It does not mirror the organizational swimlanes.
-
-```
-S1 Opportunity → ◆D1 Pursue? → S2 Technical Assurance → S3 Value & Investment → ◆D2 Invest?
-  → S4 Prepare & Readiness → ◆D3 Execute? → S5 Execute → S6 Verify Value & Learn
-```
-
-* **Stage**, **state**, **decision status** and **readiness** are stored as separate concepts (doc §29).
-* Every case shows the same **stepper**. Stages are circles, decisions are diamonds, and each step shows how many days it took.
-* For each case, the app works out the next gate and how ready its evidence is (%), and lists blockers with their owner and next action. This is the "case status" panel, modelled on the example status response in doc §34.
-
-## 2. Screens (tabs)
-
-| Tab | Purpose | Main users |
-|---|---|---|
-| **My Work** | Inbox that shows only what needs *this person's* action (streams, workstreams, risks, decisions, SLA breaches), plus exceptions and a pipeline-at-a-glance chart. | everyone |
-| **Pipeline** | Board with one column per step (decision columns highlighted) and a table view. Cards show class, incremental bopd, days in step vs SLA, and next-gate readiness. Filters: field, type, class, text, over-SLA. | integrator, management |
-| **Opportunity** | The shared object. Header with reservoir → realizable → incremental potential, cost and NPV. Sub-tabs: Overview, Technical assurance (stream cards + potential waterfall + WPA-by-exception), Value & investment (economics consistency check), Gates & decisions (criteria checklist with automation mode), Readiness (parallel workstreams, WRR at T-8), Execution & value (actual vs D2 baseline), Risks & changes, History (audit trail). | all disciplines |
-| **Decisions** | Queue of D1/D2/D3 cases (mine / all) and the selected case's **decision package**. A form whose outcomes come from config: rationale is mandatory, conditions are optional, and the record stores approver, date, baseline and resulting state. | decision authorities |
-| **Process Stats** | **Time per process**: median vs SLA per step, working vs waiting time, flow segments (Opp→D1, D1→D2, D2→RTE, RTE→Exec), lead-time trend, bottleneck heat map (by class/type/field), WIP ageing, value realization, table view. | management, process owner |
-| **Admin** | Process config viewer (steps, SLA, criteria, automation mix, classes, streams), account types and permission matrix, users, **activity log & process mining**, raw YAML. | admin |
-| **New opportunity** (button) | Stage 1 framing form **generated from config**. Fields marked `auto` are pre-filled from master data. A live preview shows class, required streams, D1 authority and SLA. | contributors, integrator |
-
-Screenshots: [`docs/screenshots/`](docs/screenshots).
-
-## 3. Account types (5)
-
-Roles are combinable (for example, the integrator is also a contributor). Discipline and authority level are **attributes** of a user, not extra roles. This keeps the role list short while still giving discipline-scoped editing and authority-scoped approvals.
-
-| Account type | Can | Scoped by |
-|---|---|---|
-| **Viewer** | read everything | n/a |
-| **Contributor** | originate opportunities; edit *their discipline's* assurance streams and readiness workstreams; register risks; record execution | `discipline` (Reservoir, Ops Eng, ALS, Production, Integrity, Field Ops, Regulatory, Finance, Supply Chain) |
-| **Integrator** (Surveillance / WPA) | everything a contributor can do on any discipline, plus confirm gate evidence, change state, prepare decision packages, run value review | n/a |
-| **Decision Authority** | sign D1/D2/D3 within their authority | `authority` per gate and class (config `decisions.*.authority`) |
-| **Administrator** | config, users, activity logs | n/a |
-
-On **Posit Connect**, `session$user` and `session$groups` identify the person. Connect groups map to roles (`roles.*.connect_groups`). The user table (discipline, authority) is a CSV for now and will move to a **pin**.
-
-## 4. Configuration (adjust the process without code)
-
-`inst/config/process.yml` is the single source of truth for:
-
-* steps, SLA per class, and states mapped to steps;
-* gates: outcomes → resulting state, and **criteria with an automation mode**;
-* intervention types, **complexity classes** and classification rules (thresholds);
-* assurance streams (with `applies_when` conditions), readiness workstreams, the WRR offset;
-* WPA exception triggers, change-control materiality thresholds;
-* the framing form fields, roles and permissions, activity-to-phase mapping, KPI targets.
-
-`wt_validate_config()` checks the file at startup. For example, it stops the app if a decision leads to an unknown state, or if an `auto` criterion has no check. Rules are structured (`{field, op, value}` or `{fn: name}`) and never `eval()`'d, so a config file cannot execute code.
-
-### Progressive automation
-
-Every gate criterion is `manual` → `assisted` → `auto`:
-
-* **manual**: a person ticks it and attaches evidence;
-* **assisted**: the app evaluates it from data and proposes a result; a person confirms (shown as *SUGGESTED*);
-* **auto**: the app evaluates it.
-
-Moving a criterion to the next level means changing its `mode` in YAML (and adding a check function in `wt_check_registry()` if it is new). The Admin tab shows the auto/assisted/manual mix per gate as an **automation coverage** indicator.
-
-Items tagged `# TBV` in the YAML are the "to be validated" list in doc §40 (authorities, thresholds, mandatory disciplines, WPA triggers, RTE checklist…).
-
-## 5. Data tracked per opportunity
-
-Relational model (DuckDB in dev). All SQL is in `R/data_access.R` and all access goes through DBI, so moving to SQL Server or PostgreSQL means changing the driver in `wt_db_connect()`.
-
-| Table | Content |
+| Tab | Content |
 |---|---|
-| `opportunity` | framing, well context, class, step + state, reservoir/realizable/incremental potential, cost ± uncertainty, NPV/IRR/payout, economic basis, baseline version, planned & actual execution, value realization, lesson |
-| `step_history` | entered/exited per step, waiting share, recycle flag. **Drives every time statistic.** |
-| `stream_status` | assurance stream per case: status, owner, constraint (bopd), note |
-| `workstream_status` | readiness workstream per case: status, owner, due date |
-| `gate_check` | manual/assisted evidence confirmations (who, when, evidence) |
-| `decision` | gate, outcome, authority, decided_by/at, baseline, rationale, conditions, superseded |
-| `risk` | category, P×C, mitigation, owner, due, status |
-| `change_request` | post-D2 changes, materiality (accept / revalidate / reapprove D2), status |
-| `activity_log` | raw UI events mapped to process phases (process mining) |
+| **Pipeline** (home) | Board with one column per step. Each card shows class, incremental potential, days in step vs target, and how much of the next gate's evidence is in place. Filters: field, type, text. |
+| **Opportunity** | Header (current / reservoir / realizable potential, cost), decision-thread stepper, and four sections: Overview, Technical assurance (discipline status cards), Gates (D1/D2/D3 criteria met/open), Readiness. A small "Case status" panel shows the next gate and its open items. |
+| **Decisions** | Cases waiting for D1/D2/D3, with the evidence package and the possible outcomes. No decision form. |
+| **Process Stats** | Three KPIs (median lead time, active cases, % over target) and two charts: time per step vs target, and work in progress. |
+| **New opportunity** | The framing form, with a side panel showing the resulting class and required disciplines. **Nothing is saved.** |
 
-## 6. Value KPIs (shown in Process Stats)
+A permanent banner says: *"EARLY PREVIEW: a concept to collect your feedback, not a working tool. Data is fictitious, screens will change, and nothing you enter is saved."*
 
-| KPI | Why it shows the value of the process |
-|---|---|
-| Median lead time (opportunity → executed) vs target by class | the main speed outcome |
-| Opp→D1, D1→D2, D2→RTE, RTE→Exec | locates where time is lost (doc §37 flow efficiency) |
-| Working vs waiting time per step | quantifies hand-off and queue waste |
-| **Deferred oil from delays** = Σ (days over SLA × incremental bopd) of open steps | puts a **barrel value on process delay** |
-| % cases managed by exception (no WPA meeting) | measures the shift from meetings to asynchronous assurance |
-| Value realization = actual / promised oil (and cost ratio) | checks whether D2 promises hold |
-| Recycle rate after D2, % over SLA, open blockers | decision quality and process health |
+## What is deliberately not shown (vs. the full mockup)
 
-## 7. Process mining
+- **Writing data.** No decision signing, evidence confirmation, stream/workstream updates or saved opportunities.
+- **My Work** inbox and the role-based exception lists.
+- **Automation signals:** criteria automation modes (auto/assisted/manual), "auto" master-data badges, auto-filled form fields, the assistant / "Ask" box.
+- **Advanced analysis:** reservoir → realizable waterfall, WPA-by-exception triggers, economics (NPV/IRR/consistency check), execution vs baseline, risks and change control, history/audit trail.
+- **Advanced stats:** working vs waiting time, flow segments, bottleneck heat map, lead-time trend, value realization, deferred-oil KPI.
+- **Admin:** config viewer, permission matrix, user table, activity logging and process mining. Activity logging is removed entirely from this branch, so nothing about users is recorded.
 
-`www/activity.js` captures input changes and navigation **in the browser** and sends them to the server in batches every 5 s. `wt_map_activity_phase()` maps raw ids to readable phases using the config (`^opp-stream_` → *Technical assurance*, `^decisions-decide` → *Record decision*, …). `wt_activity_eventlog()` collapses consecutive events into activity instances (case = opportunity, activity = phase, resource = user, start/end). The Admin tab shows time by phase and a directly-follows matrix, and exports a CSV ready for bupaR / pm4py / Celonis.
+These are held back on purpose, so later releases deliver visible progress.
 
-## 8. Performance: moving work out of the Shiny R process
+## Presenter notes (managing expectations)
 
-1. **Database**: step statistics and readiness move into SQL views (`wt_db_step_stats()` shows the pattern with DuckDB `quantile_cont`). The app then reads pre-aggregated rows.
-2. **Scheduled jobs on Connect** (Quarto/R Markdown): nightly retrieval of well, production and ALS master data; recomputation of the portfolio summary, SLA breaches and reminders, written to tables or pins.
-3. **API** (plumber on Connect): readiness and status-summary endpoints that the LLM assistant and other systems can call, so the logic is not tied to a Shiny session.
-4. **Client side**: charts render in the browser (echarts), the board is static HTML with JS click handlers, and the activity log is buffered in JS.
-5. **Shared connection pool** across sessions, with a file or enterprise database once multi-process.
-
-## 9. Code layout
-
-```
-inst/config/process.yml   process definition (YAML)
-inst/config/users.csv     user → roles/discipline/authority (→ pin)
-inst/app/www/             welltrack.css (industrial theme), activity.js (logger)
-R/config.R                load/validate config, accessors
-R/process_logic.R         rules, classification, gates, transitions, WPA, status summary
-R/work_items.R            portfolio summary, My Work items
-R/stats.R                 durations, lead times, KPIs
-R/activity_log.R          phase mapping, event log, transitions
-R/users.R                 user resolution (Connect), permissions
-R/data_access.R           ALL database access (DBI)
-R/mock_data.R             synthetic portfolio for the mockup
-R/ui_helpers.R            callouts, KPI tiles, badges, stepper, board
-R/tab_<tab>_ui.R / _server.R   one pair per main tab
-R/mod_newopp.R            config-driven framing form
-tests/testthat/           unit tests for all non-UI functions
-app.R                     Posit Connect entry point
-```
-
-## 10. Questions for the mockup review
-
-1. Are **five account types** right? Should Planner/Regulatory become a separate type, or stay contributors with a discipline?
-2. Should the home page stay **My Work** (inbox), or should it be the **Pipeline** board for some roles?
-3. Gate criteria and their initial automation mode: which manual items can start as *assisted*?
-4. Classification thresholds (150 / 800 kUSD, 100 bopd), SLA per step and class, WPA triggers.
-5. Should D1 be decided individually or in a weekly batch (a "D1 board" view)?
-6. Which source systems feed the `auto` fields (well master, production, ALS, SAP)?
-7. Which extra Stats breakdowns are needed (by rig, by originator, by discipline queue time)?
+- Open with the banner: this is a **concept to react to**, built on fictitious data. It is not a beta.
+- Ask for feedback on **the flow and the information**, not on features: *Are these the right steps and gates? Is anything missing in the card / case header? Who should own each item?*
+- When asked "when can we use it?", answer with the **sequence**, not a date: validate the process → connect real data sources → enable data entry for a pilot group → extend. Each step needs their input and IT/data work.
+- Note requests in a backlog, and avoid promising features in the room.
+- Questions worth asking:
+  1. Do the six stages and three decisions match how you work?
+  2. What should a card on the board show at a glance?
+  3. Which gate criteria are missing or unnecessary for your discipline?
+  4. What time targets per step are realistic?

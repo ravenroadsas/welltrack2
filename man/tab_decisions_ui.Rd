@@ -10,7 +10,6 @@ tab_decisions_ui(id)
 \item{id}{Module id.}
 }
 \description{
-Queue of cases pending D1 / D2 / D3 and the decision package of the
-selected case, with the decision form (outcomes from config).
+Cases waiting for D1 / D2 / D3 and the evidence package of the selected case.
 }
 \keyword{internal}

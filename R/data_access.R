@@ -26,7 +26,7 @@ wt_db_disconnect <- function(con) {
 #' @export
 wt_db_tables <- function() {
   c("opportunity", "step_history", "stream_status", "workstream_status", "risk",
-    "decision", "gate_check", "change_request", "activity_log")
+    "decision", "gate_check", "change_request")
 }
 
 #' Seed the database from a list of data frames (mockup / tests)
@@ -175,15 +175,6 @@ wt_db_record_decision <- function(con, opp_id, gate, outcome, user, rationale, c
     }
   })
   new_state
-}
-
-#' Append raw activity events
-#' @param con DBI connection.
-#' @param events data.frame(ts, session_id, user, input_id, value, opp_id, phase).
-#' @export
-wt_db_log_activity <- function(con, events) {
-  if (!nrow(events)) return(invisible(0))
-  DBI::dbAppendTable(con, "activity_log", events[, DBI::dbListFields(con, "activity_log")])
 }
 
 #' Step duration statistics computed in the database

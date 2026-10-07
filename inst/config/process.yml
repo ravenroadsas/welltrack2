@@ -15,7 +15,7 @@
 # Items flagged `# TBV` are "To Be Validated" by the business (doc section 40).
 # =============================================================================
 
-version: "0.1.0-mockup"
+version: "0.1.0-preview"
 process:
   name: Well Intervention
   organization: SierraCol Energy
@@ -338,28 +338,9 @@ roles:
     permissions: [view, decide]
   admin:
     name: Administrator
-    description: Manages configuration, users and roles; reads activity / process-mining logs.
+    description: Manages configuration, users and roles.
     connect_groups: [wt_admins]
     permissions: [view, admin]
-
-# -----------------------------------------------------------------------------
-# Activity logging -> human-readable process phases (process mining).
-# Raw Shiny input ids are matched (regex, first match wins) to a phase.
-# -----------------------------------------------------------------------------
-activity_phases:
-  - {pattern: "^nav$",                  phase: Navigate}
-  - {pattern: "^newopp-",               phase: Frame opportunity}
-  - {pattern: "^pipeline-",             phase: Browse pipeline}
-  - {pattern: "^mywork-",               phase: Triage my work}
-  - {pattern: "^opp-stream_",           phase: Technical assurance}
-  - {pattern: "^opp-ws_",               phase: Readiness preparation}
-  - {pattern: "^opp-crit_",             phase: Gate evidence}
-  - {pattern: "^opp-",                  phase: Review opportunity}
-  - {pattern: "^decisions-decide",      phase: Record decision}
-  - {pattern: "^decisions-",            phase: Prepare decision}
-  - {pattern: "^stats-",                phase: Analyze performance}
-  - {pattern: "^admin-",                phase: Administer}
-  - {pattern: ".*",                     phase: Other}
 
 # -----------------------------------------------------------------------------
 # Value KPIs shown on the dashboard (see README for definitions)

@@ -1,9 +1,7 @@
 # New opportunity (Stage 1 framing) - modal module ------------------------------------
 #
-# The form is generated from config `framing_fields`; fields with
-# `source: auto` are pre-filled from master data when a well is chosen
-# (simulated here from existing records). A live preview shows how the
-# configuration will treat the case (class, required streams, authority).
+# The form is generated from config `framing_fields`. A side panel shows how
+# the process will treat the case. Preview edition: nothing is saved.
 
 #' Build one framing input from its config definition
 #' @param f Field definition.
@@ -13,8 +11,7 @@
 #' @keywords internal
 wt_framing_input <- function(f, ns, cfg, wells) {
   id <- ns(paste0("f_", f$id))
-  label <- htmltools::tagList(f$label, if (isTRUE(f$required)) htmltools::span(class = "wt-req", "*"),
-                              if (identical(f$source, "auto")) htmltools::span(class = "wt-auto", "auto"))
+  label <- htmltools::tagList(f$label, if (isTRUE(f$required)) htmltools::span(class = "wt-req", "*"))
   choices <- if (!is.null(f$choices_from)) {
     stats::setNames(vapply(cfg[[f$choices_from]], `[[`, "", "id"), vapply(cfg[[f$choices_from]], `[[`, "", "name"))
   } else unlist(f$choices)
@@ -53,24 +50,12 @@ mod_newopp_server <- function(id, app) {
           htmltools::div(class = "wt-assistant", shiny::uiOutput(ns("preview")))
         ),
         footer = htmltools::tagList(
-          htmltools::span(class = "wt-live", "LIVE"),
+          htmltools::span(class = "wt-hint", "Preview: the form is not saved. "),
           htmltools::tags$button(type = "button", class = "btn btn-sm btn-default", `data-dismiss` = "modal", `data-bs-dismiss` = "modal", "Cancel"),
-          shiny::actionButton(ns("save_draft"), "Save draft", class = "btn-sm"),
-          shiny::actionButton(ns("submit"), "Submit framed opportunity", class = "btn-sm btn-warning")
+          shiny::actionButton(ns("submit"), "Submit", class = "btn-sm btn-warning")
         )
       ))
     })
-
-    # Simulated master-data retrieval for auto fields
-    shiny::observeEvent(input$f_well, {
-      o <- app$data()$opportunity
-      hit <- o[o$well == input$f_well, ]
-      if (!nrow(hit)) return()
-      hit <- hit[which.max(hit$created_at), ]
-      shiny::updateTextInput(session, "f_field", value = hit$field)
-      shiny::updateNumericInput(session, "f_current_bopd", value = if (is.na(hit$actual_bopd)) hit$current_bopd else hit$actual_bopd)
-      shiny::updateCheckboxInput(session, "f_artificial_lift", value = isTRUE(hit$artificial_lift))
-    }, ignoreInit = TRUE)
 
     record <- shiny::reactive({
       rec <- lapply(fields, function(f) input[[paste0("f_", f$id)]])
@@ -94,33 +79,23 @@ mod_newopp_server <- function(id, app) {
       sn <- wt_streams(cfg)
       miss <- missing_required()
       htmltools::tagList(
-        htmltools::div(class = "wt-section", shiny::icon("robot"), "How the process will treat this case"),
+        htmltools::div(class = "wt-section", "How the process will treat this case"),
         htmltools::tags$table(class = "wt-mini",
           htmltools::tags$tr(htmltools::tags$td("Complexity class"), htmltools::tags$td(wt_class_badge(rec$class, cfg), cfg$complexity_classes[[rec$class]]$name)),
-          htmltools::tags$tr(htmltools::tags$td("D1 authority"), htmltools::tags$td(cfg$decisions$D1$authority[[rec$class]])),
-          htmltools::tags$tr(htmltools::tags$td("D1 SLA"), htmltools::tags$td(wt_sla_days(cfg, "D1", rec$class), " days")),
-          htmltools::tags$tr(htmltools::tags$td("WPA"), htmltools::tags$td(cfg$complexity_classes[[rec$class]]$wpa_meeting)),
-          htmltools::tags$tr(htmltools::tags$td("Assurance streams"), htmltools::tags$td(
+          htmltools::tags$tr(htmltools::tags$td("Required disciplines"), htmltools::tags$td(
             paste(sn$name[match(wt_required_streams(rec, cfg), sn$id)], collapse = ", ")))),
         if (length(miss)) wt_callout("Missing for D1", type = "warn", paste(miss, collapse = ", "))
-        else wt_callout("Framing complete", type = "ok", "D1 criterion 'Opportunity clearly defined' will be met automatically.")
+        else wt_callout("Framing complete", type = "ok", "Ready to go to D1.")
       )
     })
 
-    save <- function(state) {
-      if (state == "OPPORTUNITY_FRAMED" && length(missing_required())) {
+    shiny::observeEvent(input$submit, {
+      if (length(missing_required())) {
         shiny::showNotification(paste("Complete:", paste(missing_required(), collapse = ", ")), type = "error")
         return()
       }
-      rec <- record()
-      rec$state <- state; rec$step_id <- "S1"; rec$originator <- app$user()$user
-      id <- wt_db_insert_opportunity(app$con, rec)
       shiny::removeModal()
-      app$bump()
-      app$open_opp(id)
-      shiny::showNotification(sprintf("%s created (%s, class %s)", id, state, rec$class), type = "message")
-    }
-    shiny::observeEvent(input$submit, save("OPPORTUNITY_FRAMED"))
-    shiny::observeEvent(input$save_draft, save("OPPORTUNITY_DRAFT"))
+      shiny::showNotification("Preview only: the opportunity was not saved. Thank you for trying the form!", type = "message")
+    })
   })
 }

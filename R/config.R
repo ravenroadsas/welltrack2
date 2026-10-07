@@ -34,7 +34,7 @@ wt_load_config <- function(path = Sys.getenv("WT_CONFIG_PATH", "")) {
 wt_validate_config <- function(cfg) {
   required <- c("steps", "states", "decisions", "intervention_types",
                 "complexity_classes", "assurance_streams",
-                "readiness_workstreams", "roles", "activity_phases")
+                "readiness_workstreams", "roles")
   missing <- setdiff(required, names(cfg))
   if (length(missing)) stop("Config missing sections: ", paste(missing, collapse = ", "), call. = FALSE)
 

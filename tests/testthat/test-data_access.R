@@ -32,8 +32,4 @@ test_that("database round trip, inserts and decisions", {
   ss <- wt_db_step_stats(con)
   expect_true(all(c("step_id", "class", "median_days") %in% names(ss)))
 
-  ev <- data.frame(ts = Sys.time(), session_id = "s", user = "u", input_id = "nav", value = "x", opp_id = NA_character_, phase = "Navigate")
-  n0 <- nrow(wt_db_read(con, "activity_log"))
-  wt_db_log_activity(con, ev)
-  expect_equal(nrow(wt_db_read(con, "activity_log")), n0 + 1)
 })

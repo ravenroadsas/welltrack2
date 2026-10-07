@@ -13,25 +13,22 @@ app_ui <- function(cfg, users) {
 
   bslib::page_navbar(
     id = "nav",
-    title = htmltools::span(class = "wt-brand", shiny::icon("oil-well"), "WellTrack", htmltools::tags$sup("2.0")),
-    window_title = "WellTrack 2.0",
+    title = htmltools::span(class = "wt-brand", shiny::icon("oil-well"), "WellTrack", htmltools::tags$sup("2.0 preview")),
+    window_title = "WellTrack 2.0 (preview)",
     theme = theme,
     bg = "#1d252c",
     inverse = TRUE,
     fillable = FALSE,
     header = htmltools::tagList(
       htmltools::tags$link(rel = "stylesheet", href = "wt-www/welltrack.css"),
-      htmltools::tags$script(src = "wt-www/activity.js"),
-      htmltools::div(class = "wt-mockbar", shiny::icon("pen-ruler"),
-        "UI MOCKUP \u2014 synthetic data, process from config v", cfg$version,
-        ". Interactions marked", htmltools::span(class = "wt-live", "LIVE"), "write to the in-memory database.")
+      htmltools::div(class = "wt-mockbar", shiny::icon("flask"),
+        htmltools::strong("EARLY PREVIEW"), " \u2014 a concept to collect your feedback, not a working tool. ",
+        "Data is fictitious, screens will change, and nothing you enter is saved.")
     ),
-    bslib::nav_panel("My Work", value = "mywork", icon = shiny::icon("inbox"), tab_mywork_ui("mywork")),
     bslib::nav_panel("Pipeline", value = "pipeline", icon = shiny::icon("table-columns"), tab_pipeline_ui("pipeline", cfg)),
     bslib::nav_panel("Opportunity", value = "opportunity", icon = shiny::icon("folder-open"), tab_opportunity_ui("opp")),
     bslib::nav_panel("Decisions", value = "decisions", icon = shiny::icon("gavel"), tab_decisions_ui("decisions")),
     bslib::nav_panel("Process Stats", value = "stats", icon = shiny::icon("chart-column"), tab_stats_ui("stats", cfg)),
-    bslib::nav_panel("Admin", value = "admin", icon = shiny::icon("sliders"), tab_admin_ui("admin")),
     bslib::nav_spacer(),
     bslib::nav_item(shiny::actionButton("newopp-open", "New opportunity", icon = shiny::icon("plus"), class = "btn-sm btn-warning wt-new")),
     bslib::nav_item(htmltools::div(class = "wt-user",

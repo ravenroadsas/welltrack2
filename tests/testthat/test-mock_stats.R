@@ -28,14 +28,8 @@ test_that("lead times and KPIs", {
   expect_true(k$deferred_bo >= 0)
 })
 
-test_that("portfolio summary and my work", {
+test_that("portfolio summary", {
   s <- wt_portfolio_summary(mock, cfg, mock_now)
   expect_equal(nrow(s), nrow(mock$opportunity))
   expect_true(all(s$readiness[!s$terminal] >= 0 & s$readiness[!s$terminal] <= 100, na.rm = TRUE))
-  users <- wt_read_users()
-  integ <- wt_resolve_user("juan.surv", character(), users, cfg)
-  w <- wt_my_work(mock, s, integ, cfg, mock_now)
-  expect_true(all(c("priority", "kind", "opp_id", "action") %in% names(w)))
-  viewer <- wt_resolve_user("nobody", character(), users, cfg)
-  expect_equal(nrow(wt_my_work(mock, s, viewer, cfg, mock_now)), 0)
 })
