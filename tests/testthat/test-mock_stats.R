@@ -1,0 +1,41 @@
+test_that("mock data is coherent with the config", {
+  expect_true(all(mock$opportunity$state %in% wt_states(cfg)$id))
+  expect_true(all(mock$opportunity$step_id %in% wt_steps(cfg)$id))
+  expect_true(all(mock$step_history$opp_id %in% mock$opportunity$opp_id))
+  expect_true(all(mock$decision$gate %in% names(cfg$decisions)))
+  expect_false(anyDuplicated(mock$opportunity$opp_id) > 0)
+})
+
+test_that("step durations and stats", {
+  d <- wt_step_durations(mock$step_history, mock$opportunity, cfg, mock_now)
+  expect_true(all(d$days >= 0))
+  expect_true(all(c("sla_days", "over_sla", "working_days", "waiting_days") %in% names(d)))
+  s <- wt_step_stats(d)
+  expect_true(all(s$median_days > 0))
+  expect_true(all(s$pct_over_sla >= 0 & s$pct_over_sla <= 100))
+  s2 <- wt_step_stats(d, c("step_id", "class"))
+  expect_true("class" %in% names(s2))
+})
+
+test_that("lead times and KPIs", {
+  lt <- wt_lead_times(mock$step_history)
+  expect_equal(nrow(lt), length(unique(mock$step_history$opp_id)))
+  ok <- !is.na(lt$lead_time)
+  expect_true(all(lt$lead_time[ok] >= lt$opp_to_d1[ok]))
+  d <- wt_step_durations(mock$step_history, mock$opportunity, cfg, mock_now)
+  k <- wt_kpis(mock, d, cfg)
+  expect_true(k$active > 0)
+  expect_true(k$deferred_bo >= 0)
+})
+
+test_that("portfolio summary and my work", {
+  s <- wt_portfolio_summary(mock, cfg, mock_now)
+  expect_equal(nrow(s), nrow(mock$opportunity))
+  expect_true(all(s$readiness[!s$terminal] >= 0 & s$readiness[!s$terminal] <= 100, na.rm = TRUE))
+  users <- wt_read_users()
+  integ <- wt_resolve_user("juan.surv", character(), users, cfg)
+  w <- wt_my_work(mock, s, integ, cfg, mock_now)
+  expect_true(all(c("priority", "kind", "opp_id", "action") %in% names(w)))
+  viewer <- wt_resolve_user("nobody", character(), users, cfg)
+  expect_equal(nrow(wt_my_work(mock, s, viewer, cfg, mock_now)), 0)
+})

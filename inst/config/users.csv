@@ -1,0 +1,16 @@
+user,display_name,roles,discipline,authority
+ana.rmt,Ana Rojas,contributor,Reservoir,
+carlos.ops,Carlos Peña,contributor,Operations Engineering,
+diana.als,Diana Mejía,contributor,ALS,
+eduardo.prod,Eduardo Silva,contributor,Production,
+felipe.int,Felipe Ortiz,contributor,Asset Integrity,
+gloria.field,Gloria Duarte,contributor,Field Operations,
+hector.reg,Héctor Ruiz,contributor,Regulatory,
+ines.fin,Inés Castro,contributor,Finance,
+juan.surv,Juan Morales,integrator;contributor,Surveillance,
+laura.am,Laura Gómez,decision_authority,Asset Management,Asset Manager
+mario.ops,Mario Torres,decision_authority,Operations,Operations Superintendent
+nora.lead,Nora Vargas,decision_authority,Surveillance,Asset Surveillance Lead
+sofia.scm,Sofía León,contributor,Supply Chain,
+paula.vp,Paula Herrera,decision_authority;viewer,Management,VP Operations
+admin,WellTrack Admin,admin;viewer,IT,

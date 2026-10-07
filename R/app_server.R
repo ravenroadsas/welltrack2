@@ -1,0 +1,64 @@
+#' Application server
+#'
+#' Builds the shared `app` context passed to every tab module:
+#' config, connection, reactive data, current user, navigation helpers.
+#' @param cfg Config list.
+#' @param con DBI connection.
+#' @param users User table.
+#' @keywords internal
+app_server <- function(cfg, con, users) {
+  function(input, output, session) {
+    base_user <- wt_resolve_user(session$user, session$groups, users, cfg)
+    user <- shiny::reactiveVal(base_user)
+
+    # Dev / mockup only: impersonate any user to preview the UI per account type
+    shiny::observeEvent(input$dev_user, {
+      if (base_user$dev) user(wt_resolve_user(input$dev_user, character(), users, cfg))
+    })
+    output$user_roles <- shiny::renderUI({
+      htmltools::tagList(lapply(user()$roles, function(r) wt_badge(cfg$roles[[r]]$name, "role")))
+    })
+
+    db_version <- shiny::reactiveVal(0)
+    data <- shiny::reactive({
+      db_version()
+      wt_db_read_all(con)
+    })
+    now <- Sys.time()
+    summary <- shiny::reactive(wt_portfolio_summary(data(), cfg, now))
+
+    selected_opp <- shiny::reactiveVal(NULL)
+    app <- list(
+      cfg = cfg, con = con, users = users, data = data, summary = summary, user = user, now = now,
+      bump = function() db_version(db_version() + 1),
+      selected_opp = selected_opp,
+      open_opp = function(id) {
+        selected_opp(id)
+        bslib::nav_select("nav", "opportunity", session = session)
+      },
+      open_tab = function(tab) bslib::nav_select("nav", tab, session = session)
+    )
+
+    tab_mywork_server("mywork", app)
+    tab_pipeline_server("pipeline", app)
+    tab_opportunity_server("opp", app)
+    tab_decisions_server("decisions", app)
+    tab_stats_server("stats", app)
+    tab_admin_server("admin", app)
+    mod_newopp_server("newopp", app)
+
+    # Activity log: batches sent by www/activity.js
+    shiny::observeEvent(input$wt_activity, {
+      ev <- input$wt_activity
+      if (!length(ev$input_id)) return()
+      ids <- unlist(ev$input_id)
+      events <- data.frame(
+        ts = as.POSIXct(unlist(ev$ts) / 1000, origin = "1970-01-01", tz = "UTC"),
+        session_id = session$token, user = user()$user, input_id = ids,
+        value = substr(as.character(unlist(ev$value)), 1, 100),
+        opp_id = selected_opp() %||% NA_character_,
+        phase = wt_map_activity_phase(ids, cfg), stringsAsFactors = FALSE)
+      wt_db_log_activity(con, events)
+    })
+  }
+}

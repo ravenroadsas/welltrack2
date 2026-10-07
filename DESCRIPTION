@@ -1,0 +1,30 @@
+Package: welltrack2
+Title: WellTrack 2.0 - Decision-Centric Well Intervention Process
+Version: 0.1.0.9000
+Authors@R: person("Frenk", "Giorgetti", email = "frenk.giorgetti@gmail.com", role = c("aut", "cre"))
+Description: Shiny application that manages well intervention opportunities
+    (workover, well service, initial completion) along a configurable,
+    decision-centric process: Opportunity, D1 Pursue, Technical Assurance,
+    Value and Investment, D2 Invest, Prepare and Readiness, D3 Execute,
+    Execute, Verify Value and Learn. The process is defined in YAML.
+License: file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1)
+Imports:
+    bslib (>= 0.6.0),
+    DBI,
+    dplyr,
+    DT,
+    duckdb,
+    echarts4r,
+    htmltools,
+    htmlwidgets,
+    shiny (>= 1.8.0),
+    stats,
+    utils,
+    yaml
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1

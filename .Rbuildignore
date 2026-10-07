@@ -1,0 +1,7 @@
+^app\.R$
+^docs$
+^README\.md$
+^\.github$
+^rsconnect$
+^.*\.Rproj$
+^\.Rproj\.user$

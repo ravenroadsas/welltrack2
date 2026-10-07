@@ -1,0 +1,370 @@
+# =============================================================================
+# WellTrack 2.0 - Process definition
+# -----------------------------------------------------------------------------
+# Single source of truth for the Well Intervention process.
+# Everything the app shows as a "step", "gate", "stream", "workstream",
+# "criterion" or "role" is read from this file. Change the process here,
+# not in R code.
+#
+# Automation is progressive: every gate criterion has a `mode`
+#   manual    -> a person ticks it and attaches evidence
+#   assisted  -> the app proposes a value from data, a person confirms
+#   auto      -> the app evaluates it from data (structured `check`)
+# Promoting a criterion from manual -> assisted -> auto is a config change.
+#
+# Items flagged `# TBV` are "To Be Validated" by the business (doc section 40).
+# =============================================================================
+
+version: "0.1.0-mockup"
+process:
+  name: Well Intervention
+  organization: SierraCol Energy
+  thread: [Opportunity, Pursue, Assure, Invest, Prepare, Execute, Verify Value, Learn]
+
+# -----------------------------------------------------------------------------
+# Lifecycle: ordered steps. kind = stage | decision
+# sla_days: target working days per complexity class (TBV)
+# -----------------------------------------------------------------------------
+steps:
+  - id: S1
+    kind: stage
+    name: Opportunity
+    short: Opportunity
+    question: Is there enough potential to investigate?
+    output: Framed opportunity
+    owner_role: contributor
+    sla_days: {A: 5, B: 10, C: 15}
+  - id: D1
+    kind: decision
+    name: D1 - Pursue?
+    short: D1 Pursue
+    question: Should engineering effort be invested?
+    output: Pursue / Reject / Defer
+    owner_role: decision_authority
+    sla_days: {A: 2, B: 5, C: 7}
+  - id: S2
+    kind: stage
+    name: Technical Assurance
+    short: Assurance
+    question: Can the potential realistically be delivered?
+    output: Realizable potential + viable intervention concept
+    owner_role: integrator
+    sla_days: {A: 5, B: 20, C: 35}
+  - id: S3
+    kind: stage
+    name: Value & Investment
+    short: Value
+    question: Is the intervention worth doing?
+    output: Investment case
+    owner_role: integrator
+    sla_days: {A: 3, B: 7, C: 14}
+  - id: D2
+    kind: decision
+    name: D2 - Invest?
+    short: D2 Invest
+    question: Should the company commit resources/capital?
+    output: Go / No-Go / Defer
+    owner_role: decision_authority
+    sla_days: {A: 3, B: 7, C: 10}
+  - id: S4
+    kind: stage
+    name: Prepare & Readiness
+    short: Prepare
+    question: Is everything ready to execute?
+    output: Ready-to-execute intervention
+    owner_role: integrator
+    sla_days: {A: 10, B: 30, C: 60}
+  - id: D3
+    kind: decision
+    name: D3 - Execute?
+    short: D3 Execute
+    question: Can execution safely and legally start?
+    output: Execute / Hold
+    owner_role: decision_authority
+    sla_days: {A: 1, B: 3, C: 5}
+  - id: S5
+    kind: stage
+    name: Execute
+    short: Execute
+    question: Was the intervention executed successfully?
+    output: Completed intervention
+    owner_role: contributor
+    sla_days: {A: 5, B: 15, C: 30}
+  - id: S6
+    kind: stage
+    name: Verify Value & Learn
+    short: Verify
+    question: Did the intervention deliver the promise?
+    output: Value realization + lessons
+    owner_role: integrator
+    sla_days: {A: 30, B: 60, C: 90}   # includes post-audit window (TBV)
+
+# -----------------------------------------------------------------------------
+# Canonical states (doc section 29). Each state belongs to one step.
+# terminal: case is closed for flow metrics
+# -----------------------------------------------------------------------------
+states:
+  main:
+    - {id: OPPORTUNITY_DRAFT,    step: S1}
+    - {id: OPPORTUNITY_FRAMED,   step: S1}
+    - {id: D1_PENDING,           step: D1}
+    - {id: PURSUE,               step: S2}
+    - {id: TECHNICAL_ASSURANCE,  step: S2}
+    - {id: TECHNICAL_CASE_READY, step: S3}
+    - {id: VALUE_ASSESSMENT,     step: S3}
+    - {id: D2_PENDING,           step: D2}
+    - {id: INVEST_APPROVED,      step: S4}
+    - {id: PREPARATION,          step: S4}
+    - {id: RTE_PENDING,          step: D3}
+    - {id: READY_TO_EXECUTE,     step: S5}
+    - {id: IN_EXECUTION,         step: S5}
+    - {id: EXECUTED,             step: S6}
+    - {id: VALUE_REVIEW,         step: S6}
+    - {id: CLOSED,               step: S6, terminal: true}
+  alternative:
+    - {id: NEED_MORE_INFORMATION,  step: S1}
+    - {id: DEFERRED,               step: null, terminal: true}
+    - {id: NO_GO,                  step: null, terminal: true}
+    - {id: ON_HOLD,                step: null}
+    - {id: CANCELLED,              step: null, terminal: true}
+    - {id: RECYCLE_TECHNICAL_CASE, step: S2}
+
+# -----------------------------------------------------------------------------
+# Decisions (gates): outcomes -> resulting state, and evidence criteria.
+# criteria.classes: which complexity classes require the criterion
+# criteria.check  : structured rule for auto/assisted criteria
+#   {field, op, value}  op in: >, >=, <, <=, ==, !=, not_null, true
+#   {fn: <name>}        named function from the app's check registry
+# -----------------------------------------------------------------------------
+decisions:
+  D1:
+    authority: {A: Asset Surveillance Lead, B: Asset Surveillance Lead, C: Asset Manager}   # TBV
+    outcomes:
+      PURSUE: PURSUE
+      DEFER: DEFERRED
+      REJECT: CANCELLED
+      NEED_MORE_INFORMATION: NEED_MORE_INFORMATION
+    criteria:
+      - {id: d1_defined,   label: Opportunity clearly defined,                 mode: auto,     classes: [A, B, C], check: {fn: framing_complete}}
+      - {id: d1_benefit,   label: Potential benefit exists,                    mode: auto,     classes: [A, B, C], check: {field: reservoir_bopd, op: ">", value: 0}}
+      - {id: d1_fatal,     label: No obvious fatal flaw,                       mode: manual,   classes: [A, B, C]}
+      - {id: d1_info,      label: Sufficient information to begin assurance,   mode: assisted, classes: [B, C],    check: {fn: well_context_available}}
+      - {id: d1_priority,  label: Consistent with asset priorities,            mode: manual,   classes: [B, C]}
+  D2:
+    authority: {A: Asset Manager, B: Asset Manager, C: VP Operations}   # TBV, by value/risk
+    outcomes:
+      GO: INVEST_APPROVED
+      CONDITIONAL_GO: INVEST_APPROVED
+      NO_GO: NO_GO
+      DEFER: DEFERRED
+      RECYCLE_TECHNICAL_CASE: RECYCLE_TECHNICAL_CASE
+    criteria:
+      - {id: d2_streams,     label: All required assurance streams complete,          mode: auto,     classes: [A, B, C], check: {fn: required_streams_complete}}
+      - {id: d2_realizable,  label: Realizable potential defined (and gap explained),  mode: auto,     classes: [A, B, C], check: {field: realizable_bopd, op: ">", value: 0}}
+      - {id: d2_no_conflict, label: No open discipline conflicts,                      mode: auto,     classes: [B, C],    check: {fn: no_stream_conflicts}}
+      - {id: d2_cost,        label: Cost estimate with uncertainty range,              mode: auto,     classes: [A, B, C], check: {field: cost_kusd, op: ">", value: 0}}
+      - {id: d2_econ,        label: "Economics evaluated (NPV, IRR, payout)",            mode: auto,     classes: [B, C],    check: {field: npv_kusd, op: not_null}}
+      - {id: d2_consistent,  label: Economics use current realizable potential,        mode: auto,     classes: [B, C],    check: {fn: economics_consistent}}
+      - {id: d2_risks,       label: Material risks have mitigation and owner,          mode: assisted, classes: [B, C],    check: {fn: material_risks_mitigated}}
+      - {id: d2_wpa,         label: WPA exceptions resolved (meeting if triggered),    mode: manual,   classes: [B, C]}
+      - {id: d2_recommend,   label: Technical recommendation issued by Integrator,     mode: manual,   classes: [A, B, C]}
+  D3:
+    authority: {A: Operations Superintendent, B: Operations Superintendent, C: Operations Manager}   # TBV
+    outcomes:
+      READY_TO_EXECUTE: READY_TO_EXECUTE
+      CONDITIONAL_READY: READY_TO_EXECUTE
+      HOLD: ON_HOLD
+    criteria:
+      - {id: d3_invest,    label: Investment approved (D2 GO),                 mode: auto,     classes: [A, B, C], check: {fn: d2_approved}}
+      - {id: d3_ws,        label: All applicable readiness workstreams done,   mode: auto,     classes: [A, B, C], check: {fn: workstreams_complete}}
+      - {id: d3_risks,     label: Critical risks closed or accepted,           mode: assisted, classes: [A, B, C], check: {fn: critical_risks_closed}}
+      - {id: d3_change,    label: No unassessed material change since D2,      mode: auto,     classes: [B, C],    check: {fn: no_pending_material_change}}
+      - {id: d3_wrr,       label: WRR / pre-start exceptions resolved,         mode: manual,   classes: [C]}
+
+# -----------------------------------------------------------------------------
+# Intervention types and complexity classes (doc section 27)
+# -----------------------------------------------------------------------------
+intervention_types:
+  - {id: workover,           name: Workover,           default_class: B, mandatory_streams: [reservoir, ops_eng, production]}
+  - {id: well_service,       name: Well Service,       default_class: A, mandatory_streams: [ops_eng]}
+  - {id: initial_completion, name: Initial Completion, default_class: C, mandatory_streams: [reservoir, ops_eng, production, surface, field_ops]}
+
+complexity_classes:
+  A:
+    name: Routine / Low Risk
+    color: "#7fa7c9"
+    required_streams: []
+    wpa_meeting: exception      # exception | formal
+    wrr: none                   # none | exception | formal
+    approval: asynchronous
+  B:
+    name: Standard Intervention
+    color: "#3b6f9e"
+    required_streams: [reservoir, ops_eng, production, field_ops]
+    wpa_meeting: exception
+    wrr: exception
+    approval: asynchronous
+  C:
+    name: Complex / High Value / High Risk
+    color: "#1b3a5c"
+    required_streams: [reservoir, ops_eng, als, production, surface, field_ops]
+    wpa_meeting: formal
+    wrr: formal
+    approval: meeting
+
+# Rules evaluated top-down; first match wins, otherwise intervention type default.
+classification_rules:     # TBV thresholds
+  - {class: C, any: [{field: cost_kusd, op: ">=", value: 800}, {field: hse_risk, op: "==", value: high}, {field: novelty, op: true}]}
+  - {class: B, any: [{field: cost_kusd, op: ">=", value: 150}, {field: incremental_bopd, op: ">=", value: 100}, {field: uncertainty, op: "==", value: high}]}
+  - {class: A, any: [{field: cost_kusd, op: "<", value: 150}]}
+
+# -----------------------------------------------------------------------------
+# Technical assurance streams (Stage 2, run in parallel)
+# applies_when: extra condition that makes the stream required
+# -----------------------------------------------------------------------------
+assurance_streams:
+  - id: reservoir
+    name: Reservoir / RMT
+    discipline: Reservoir
+    question: What can the reservoir and well potentially deliver?
+    outputs: [Reservoir potential, Expected rate range, Uncertainty, Incremental production, Success criteria]
+  - id: ops_eng
+    name: Operations Engineering
+    discipline: Operations Engineering
+    question: What intervention is required to access the potential?
+    outputs: [Intervention concept, Preliminary scope, Execution strategy, Preliminary cost]
+  - id: als
+    name: ALS
+    discipline: ALS
+    question: Can an ALS system reliably deliver the target operating point?
+    applies_when: {field: artificial_lift, op: true}
+    outputs: [ALS design, Operating envelope, Equipment availability, ALS cost]
+  - id: production
+    name: Production
+    discipline: Production
+    question: Can the well operate safely and sustainably at the target?
+    outputs: [Validated operating envelope, Startup requirements, Sustainable rate]
+  - id: surface
+    name: Surface / Integrity
+    discipline: Asset Integrity
+    question: Can the surface system accommodate the proposed performance?
+    applies_when: {field: artificial_lift, op: true}
+    outputs: [Electrical capacity, Required modifications, Surface cost]
+  - id: field_ops
+    name: Field Operations
+    discipline: Field Operations
+    question: Can it be executed with available field resources?
+    outputs: [Execution feasibility, Resources, Logistics constraints, Duration]
+
+stream_statuses: [not_started, in_progress, complete, conflict, not_applicable]
+
+# WPA becomes exception-based (doc section 15)
+wpa_triggers:   # TBV
+  formal_for_classes: [C]
+  stream_conflict: true
+  uncertainty_high: true
+  potential_gap_pct: 30          # (reservoir - realizable)/reservoir above this
+  value_kusd: 1500               # NPV above this
+  cost_kusd: 800
+
+# -----------------------------------------------------------------------------
+# Readiness workstreams (Stage 4, run in parallel after D2)
+# -----------------------------------------------------------------------------
+readiness_workstreams:
+  - {id: eng,        name: Detailed engineering & program, owner_role: contributor, discipline: Operations Engineering, due_offset_days: -15}
+  - {id: moc,        name: MOC,                            owner_role: contributor, discipline: Operations Engineering, due_offset_days: -12, applies_when: {field: class, op: "==", value: C}}
+  - {id: regulatory, name: Regulatory (ANH / F7CR),        owner_role: contributor, discipline: Regulatory,             due_offset_days: -10, applies_when: {field: regulatory_required, op: true}}
+  - {id: funding,    name: SAP / WBS / funding,            owner_role: contributor, discipline: Finance,                due_offset_days: -10}
+  - {id: procure,    name: Equipment & materials,          owner_role: contributor, discipline: Supply Chain,           due_offset_days: -8}
+  - {id: als_prep,   name: ALS preparation,                owner_role: contributor, discipline: ALS,                    due_offset_days: -8,  applies_when: {field: artificial_lift, op: true}}
+  - {id: surface,    name: Surface modifications,          owner_role: contributor, discipline: Asset Integrity,        due_offset_days: -8,  applies_when: {field: artificial_lift, op: true}}
+  - {id: schedule,   name: Rig / resource scheduling,      owner_role: contributor, discipline: Field Operations,       due_offset_days: -8}
+  - {id: logistics,  name: Logistics,                      owner_role: contributor, discipline: Field Operations,       due_offset_days: -5}
+  - {id: startup,    name: Startup plan,                   owner_role: contributor, discipline: Production,             due_offset_days: -3}
+
+wrr_offset_days: -8   # Well Readiness Review timing relative to planned start (TBV)
+
+# -----------------------------------------------------------------------------
+# Opportunity framing form (Stage 1). Drives the "New opportunity" form.
+# source: manual | auto (retrieved from master data - shown read-only/prefilled)
+# -----------------------------------------------------------------------------
+framing_fields:
+  - {id: well,              label: Well,                        type: select, source: auto,   required: true}
+  - {id: field,             label: Field / asset,               type: text,   source: auto,   required: true}
+  - {id: intervention_type, label: Intervention type,           type: select, source: manual, required: true, choices_from: intervention_types}
+  - {id: title,             label: Opportunity statement,       type: text,   source: manual, required: true}
+  - {id: reason,            label: Reason for intervention,     type: select, source: manual, required: true, choices: [Production decline, ALS failure, Integrity issue, Reservoir opportunity, New well, Regulatory]}
+  - {id: current_bopd,      label: Current oil rate (BOPD),     type: number, source: auto,   required: true}
+  - {id: reservoir_bopd,    label: Preliminary potential (BOPD), type: number, source: manual, required: true}
+  - {id: cost_kusd,         label: Order-of-magnitude cost (kUSD), type: number, source: manual, required: false}
+  - {id: hypothesis,        label: Initial intervention hypothesis, type: textarea, source: manual, required: true}
+  - {id: constraints,       label: Major known constraints,     type: textarea, source: manual, required: false}
+  - {id: uncertainty,       label: Uncertainty level,           type: select, source: manual, required: true, choices: [low, medium, high]}
+  - {id: artificial_lift,   label: Artificial lift involved,    type: checkbox, source: auto, required: false}
+  - {id: regulatory_required, label: ANH / F7CR required,       type: checkbox, source: manual, required: false}
+
+# -----------------------------------------------------------------------------
+# Change control after D2 (doc section 32) - materiality thresholds (TBV)
+# -----------------------------------------------------------------------------
+change_control:
+  cost_increase_pct: {revalidate: 10, reapprove_d2: 25}
+  target_reduction_pct: {revalidate: 10, reapprove_d2: 20}
+  delay_days: {revalidate: 15, reapprove_d2: 45}
+
+# -----------------------------------------------------------------------------
+# Roles / account types. Users may hold several roles.
+# connect_groups: Posit Connect groups mapped to the role
+# -----------------------------------------------------------------------------
+roles:
+  viewer:
+    name: Viewer
+    description: Read-only access to pipeline, opportunities and statistics (management, other teams).
+    connect_groups: [wt_viewers]
+    permissions: [view]
+  contributor:
+    name: Contributor
+    description: Originates opportunities and fills assigned assurance streams / readiness workstreams for their discipline (RMT, Ops Eng, ALS, Production, Integrity, Field Ops, Regulatory, Finance, Supply Chain).
+    connect_groups: [wt_contributors]
+    permissions: [view, create_opportunity, edit_stream, edit_workstream, add_risk, record_execution]
+  integrator:
+    name: Integrator (Surveillance / WPA)
+    description: Owns the case flow. Assembles the technical case, resolves conflicts, triggers WPA/WRR exceptions, prepares decision packages, runs value review.
+    connect_groups: [wt_integrators]
+    permissions: [view, create_opportunity, edit_stream, edit_workstream, add_risk, record_execution, edit_case, request_decision, change_state, value_review]
+  decision_authority:
+    name: Decision Authority
+    description: Records D1 / D2 / D3 decisions within their authority level (by class and value).
+    connect_groups: [wt_approvers]
+    permissions: [view, decide]
+  admin:
+    name: Administrator
+    description: Manages configuration, users and roles; reads activity / process-mining logs.
+    connect_groups: [wt_admins]
+    permissions: [view, admin]
+
+# -----------------------------------------------------------------------------
+# Activity logging -> human-readable process phases (process mining).
+# Raw Shiny input ids are matched (regex, first match wins) to a phase.
+# -----------------------------------------------------------------------------
+activity_phases:
+  - {pattern: "^nav$",                  phase: Navigate}
+  - {pattern: "^newopp-",               phase: Frame opportunity}
+  - {pattern: "^pipeline-",             phase: Browse pipeline}
+  - {pattern: "^mywork-",               phase: Triage my work}
+  - {pattern: "^opp-stream_",           phase: Technical assurance}
+  - {pattern: "^opp-ws_",               phase: Readiness preparation}
+  - {pattern: "^opp-crit_",             phase: Gate evidence}
+  - {pattern: "^opp-",                  phase: Review opportunity}
+  - {pattern: "^decisions-decide",      phase: Record decision}
+  - {pattern: "^decisions-",            phase: Prepare decision}
+  - {pattern: "^stats-",                phase: Analyze performance}
+  - {pattern: "^admin-",                phase: Administer}
+  - {pattern: ".*",                     phase: Other}
+
+# -----------------------------------------------------------------------------
+# Value KPIs shown on the dashboard (see README for definitions)
+# -----------------------------------------------------------------------------
+kpis:
+  lead_time_target_days: {A: 45, B: 120, C: 220}
+  realization_target_pct: 85
+  exception_managed_target_pct: 70
