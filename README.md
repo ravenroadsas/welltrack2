@@ -9,6 +9,14 @@ pkgload::load_all(); run_app()     # or shiny::runApp()
 devtools::test()
 ```
 
+### Settings
+
+| Setting | Where | Default | Effect |
+|---|---|---|---|
+| `ui.show_user_switcher` | `inst/config/process.yml` | `false` | Shows the top-right "view as user" selector with role badges. Keep it `false` for end users. |
+
+For a one-off run, `run_app(show_user_switcher = TRUE)` overrides the config without editing it, for example when rehearsing the demo across roles.
+
 ## What users see
 
 | Tab | Content |

@@ -31,7 +31,7 @@ app_ui <- function(cfg, users) {
     bslib::nav_panel("Process Stats", value = "stats", icon = shiny::icon("chart-column"), tab_stats_ui("stats", cfg)),
     bslib::nav_spacer(),
     bslib::nav_item(shiny::actionButton("newopp-open", "New opportunity", icon = shiny::icon("plus"), class = "btn-sm btn-warning wt-new")),
-    bslib::nav_item(htmltools::div(class = "wt-user",
+    if (isTRUE(cfg$ui$show_user_switcher)) bslib::nav_item(htmltools::div(class = "wt-user",
       shiny::icon("user"),
       shiny::selectInput("dev_user", NULL, choices = dev_choices, selected = Sys.getenv("WT_DEV_USER", "juan.surv"),
                          width = "230px", selectize = FALSE),

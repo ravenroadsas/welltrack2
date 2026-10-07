@@ -37,10 +37,7 @@ mod_newopp_server <- function(id, app) {
     fields <- cfg$framing_fields
 
     shiny::observeEvent(input$open, {
-      if (!wt_can(app$user(), "create_opportunity", cfg)) {
-        shiny::showNotification("Your account type cannot create opportunities.", type = "warning")
-        return()
-      }
+      # Preview edition: nothing is saved, so every user may try the form
       wells <- sort(unique(app$data()$opportunity$well))
       shiny::showModal(shiny::modalDialog(
         title = htmltools::span(shiny::icon("seedling"), "Frame a new opportunity (Stage 1)"),

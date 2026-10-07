@@ -343,6 +343,12 @@ roles:
     permissions: [view, admin]
 
 # -----------------------------------------------------------------------------
+# User interface settings
+# -----------------------------------------------------------------------------
+ui:
+  show_user_switcher: false   # true = demo/testing: view the app as any user (top-right selector)
+
+# -----------------------------------------------------------------------------
 # Value KPIs shown on the dashboard (see README for definitions)
 # -----------------------------------------------------------------------------
 kpis:

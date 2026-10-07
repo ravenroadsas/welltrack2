@@ -4,12 +4,15 @@
 \alias{run_app}
 \title{Run WellTrack 2.0}
 \usage{
-run_app(mock = TRUE, cfg = wt_load_config(), ...)
+run_app(mock = TRUE, cfg = wt_load_config(), show_user_switcher = NULL, ...)
 }
 \arguments{
 \item{mock}{Seed an in-memory database with mock data (UI mockup mode).}
 
 \item{cfg}{Process configuration (see \code{\link[=wt_load_config]{wt_load_config()}}).}
+
+\item{show_user_switcher}{Show the "view as user" selector. \code{NULL} (default)
+uses config \code{ui.show_user_switcher}; \code{TRUE}/\code{FALSE} overrides it for this run.}
 
 \item{...}{Passed to \code{\link[shiny:shinyApp]{shiny::shinyApp()}} \code{options}.}
 }

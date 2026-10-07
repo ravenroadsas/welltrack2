@@ -12,9 +12,10 @@ app_server <- function(cfg, con, users) {
     base_user <- wt_resolve_user(session$user, session$groups, users, cfg)
     user <- shiny::reactiveVal(base_user)
 
-    # Dev / mockup only: impersonate any user to preview the UI per account type
+    # Demo only (config ui.show_user_switcher): view the app as any user
     shiny::observeEvent(input$dev_user, {
-      if (base_user$dev) user(wt_resolve_user(input$dev_user, character(), users, cfg))
+      if (base_user$dev && isTRUE(cfg$ui$show_user_switcher))
+        user(wt_resolve_user(input$dev_user, character(), users, cfg))
     })
     output$user_roles <- shiny::renderUI({
       htmltools::tagList(lapply(user()$roles, function(r) wt_badge(cfg$roles[[r]]$name, "role")))
