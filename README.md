@@ -7,7 +7,7 @@ A Shiny app, built as an R package, for the **decision-centric Well Intervention
 ```r
 # run locally
 pkgload::load_all(); run_app()          # or: shiny::runApp()  (uses app.R)
-devtools::test()                        # 129 unit tests
+devtools::test()                        # 162 unit tests
 ```
 
 Use the user selector at the top right to **switch accounts**. The same screens change by role: try `Laura Gómez` (Asset Manager) to sign a D2, `Diana Mejía` (ALS) to update a stream, or `Juan Morales` (Integrator).
@@ -80,7 +80,36 @@ Moving a criterion to the next level means changing its `mode` in YAML (and addi
 
 Items tagged `# TBV` in the YAML are the "to be validated" list in doc §40 (authorities, thresholds, mandatory disciplines, WPA triggers, RTE checklist…).
 
-## 5. Data tracked per opportunity
+## 5. Analyses as gate evidence
+
+Users can run analyses inside the case to fulfil a gate requirement. The result is stored as **evidence** on the criterion.
+
+**An analysis is defined once and called by id from any process.** `inst/config/analyses.yml` is a catalog shared by all processes. Each entry is like a function signature: what case data it needs (`inputs`), which values it produces (`outputs`), who may run it (`disciplines`), and where it runs (`kind`: `module` in this app, `app` on Connect, `report`, or `external` tool). A process links analyses to criteria:
+
+```yaml
+- {id: d2_baseline, label: Production baseline analysed (decline evidence), mode: auto, classes: [B, C],
+   check: {fn: evidence_submitted, analysis: decline_curve}, analyses: [decline_curve]}
+```
+
+The same `decline_curve` is used by D1 `d1_info` and D2 `d2_baseline`. Another process would reference it the same way. Unknown ids stop the app at startup.
+
+**Implementation of an in-app analysis** (`kind: module`):
+- `R/analysis_decline.R` has a pure compute function, `wt_an_decline_fit()`. It is tested and callable from scripts, scheduled reports or an API, and returns `params`, `outputs`, `data_ref` and `summary`.
+- It also has a thin Shiny module (inputs + chart) around that function.
+- It is registered in `wt_analysis_registry()` (`R/analyses.R`).
+
+**Evidence record** (`evidence` table, built by `wt_evidence_record()`): case, gate, criterion, analysis id and version, params, outputs (JSON), data reference, summary, status (`submitted` / `superseded`), user and time. Every analysis kind writes the same record. The gate check `evidence_submitted` reads it, and evidence counts only for the criterion it was attached to.
+
+**UX: one sub-tab, however many analyses:**
+- **Opportunity → Analysis** (workbench). Left: the analyses this process links to the case's criteria, current gate first, with evidence status. Centre: the analysis. Right: its outputs and **Submit as evidence** (LIVE), plus the evidence already attached.
+- **"Analyze" button** on each gate criterion that has analyses. It opens the workbench with that analysis and criterion selected.
+- **Decision package** lists the analysis results attached to the gate.
+- **`kind: app`** analyses (example: `nodal_quicklook`) show a deep link `…?opp=…&criterion=…` to the separate Connect app. That app writes the same evidence record back. In the mockup the URL is a placeholder.
+- **Admin** lists the catalog and which criteria use each analysis.
+
+**Adding an analysis:** add a catalog entry and reference it from a criterion. For an in-app analysis, also add a compute function, a module and one registry line. The case and gate screens do not change.
+
+## 6. Data tracked per opportunity
 
 Relational model (DuckDB in dev). All SQL is in `R/data_access.R` and all access goes through DBI, so moving to SQL Server or PostgreSQL means changing the driver in `wt_db_connect()`.
 
@@ -94,9 +123,11 @@ Relational model (DuckDB in dev). All SQL is in `R/data_access.R` and all access
 | `decision` | gate, outcome, authority, decided_by/at, baseline, rationale, conditions, superseded |
 | `risk` | category, P×C, mitigation, owner, due, status |
 | `change_request` | post-D2 changes, materiality (accept / revalidate / reapprove D2), status |
+| `evidence` | analysis results attached to gate criteria (see §5) |
+| `production_history` | monthly oil rate per well (input of the decline analysis; source system later) |
 | `activity_log` | raw UI events mapped to process phases (process mining) |
 
-## 6. Value KPIs (shown in Process Stats)
+## 7. Value KPIs (shown in Process Stats)
 
 | KPI | Why it shows the value of the process |
 |---|---|
@@ -108,11 +139,11 @@ Relational model (DuckDB in dev). All SQL is in `R/data_access.R` and all access
 | Value realization = actual / promised oil (and cost ratio) | checks whether D2 promises hold |
 | Recycle rate after D2, % over SLA, open blockers | decision quality and process health |
 
-## 7. Process mining
+## 8. Process mining
 
 `www/activity.js` captures input changes and navigation **in the browser** and sends them to the server in batches every 5 s. `wt_map_activity_phase()` maps raw ids to readable phases using the config (`^opp-stream_` → *Technical assurance*, `^decisions-decide` → *Record decision*, …). `wt_activity_eventlog()` collapses consecutive events into activity instances (case = opportunity, activity = phase, resource = user, start/end). The Admin tab shows time by phase and a directly-follows matrix, and exports a CSV ready for bupaR / pm4py / Celonis.
 
-## 8. Performance: moving work out of the Shiny R process
+## 9. Performance: moving work out of the Shiny R process
 
 1. **Database**: step statistics and readiness move into SQL views (`wt_db_step_stats()` shows the pattern with DuckDB `quantile_cont`). The app then reads pre-aggregated rows.
 2. **Scheduled jobs on Connect** (Quarto/R Markdown): nightly retrieval of well, production and ALS master data; recomputation of the portfolio summary, SLA breaches and reminders, written to tables or pins.
@@ -120,10 +151,11 @@ Relational model (DuckDB in dev). All SQL is in `R/data_access.R` and all access
 4. **Client side**: charts render in the browser (echarts), the board is static HTML with JS click handlers, and the activity log is buffered in JS.
 5. **Shared connection pool** across sessions, with a file or enterprise database once multi-process.
 
-## 9. Code layout
+## 10. Code layout
 
 ```
 inst/config/process.yml   process definition (YAML)
+inst/config/analyses.yml  analysis catalog shared by all processes
 inst/config/users.csv     user → roles/discipline/authority (→ pin)
 inst/app/www/             welltrack.css (industrial theme), activity.js (logger)
 R/config.R                load/validate config, accessors
@@ -131,6 +163,8 @@ R/process_logic.R         rules, classification, gates, transitions, WPA, status
 R/work_items.R            portfolio summary, My Work items
 R/stats.R                 durations, lead times, KPIs
 R/activity_log.R          phase mapping, event log, transitions
+R/analyses.R              analysis registry, case analyses, evidence record, deep links
+R/analysis_<id>.R         one file per in-app analysis: compute function + Shiny module
 R/users.R                 user resolution (Connect), permissions
 R/data_access.R           ALL database access (DBI)
 R/mock_data.R             synthetic portfolio for the mockup
@@ -141,7 +175,7 @@ tests/testthat/           unit tests for all non-UI functions
 app.R                     Posit Connect entry point
 ```
 
-## 10. Questions for the mockup review
+## 11. Questions for the mockup review
 
 1. Are **five account types** right? Should Planner/Regulatory become a separate type, or stay contributors with a discipline?
 2. Should the home page stay **My Work** (inbox), or should it be the **Pipeline** board for some roles?

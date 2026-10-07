@@ -16,13 +16,35 @@ wt_sys_file <- function(...) {
 #'
 #' @param path YAML file. Defaults to env var `WT_CONFIG_PATH`, else the
 #'   packaged `inst/config/process.yml`.
+#' @param analyses_path Analysis catalog YAML. Defaults to env var
+#'   `WT_ANALYSES_PATH`, else the packaged `inst/config/analyses.yml`. The
+#'   catalog is shared by all processes and attached as `cfg$analyses`.
 #' @return A validated list.
 #' @export
-wt_load_config <- function(path = Sys.getenv("WT_CONFIG_PATH", "")) {
+wt_load_config <- function(path = Sys.getenv("WT_CONFIG_PATH", ""),
+                           analyses_path = Sys.getenv("WT_ANALYSES_PATH", "")) {
   if (!nzchar(path)) path <- wt_sys_file("config", "process.yml")
   cfg <- yaml::read_yaml(path)
+  cfg$analyses <- wt_load_analyses(analyses_path)
   wt_validate_config(cfg)
   cfg
+}
+
+#' Load the analysis catalog
+#' @param path Catalog YAML (see [wt_load_config()]).
+#' @return List of analysis definitions named by id.
+#' @export
+wt_load_analyses <- function(path = Sys.getenv("WT_ANALYSES_PATH", "")) {
+  if (!nzchar(path)) path <- wt_sys_file("config", "analyses.yml")
+  cat <- yaml::read_yaml(path)$analyses
+  ids <- vapply(cat, `[[`, "", "id")
+  if (anyDuplicated(ids)) stop("Duplicated analysis ids in catalog", call. = FALSE)
+  for (a in cat) {
+    if (!a$kind %in% c("module", "app", "report", "external"))
+      stop("Analysis ", a$id, " has invalid kind '", a$kind, "'", call. = FALSE)
+    if (a$kind == "app" && is.null(a$url)) stop("Analysis ", a$id, " (app) needs a `url`", call. = FALSE)
+  }
+  stats::setNames(cat, ids)
 }
 
 #' Validate the structure of a process configuration
@@ -58,6 +80,9 @@ wt_validate_config <- function(cfg) {
         stop("Criterion ", cr$id, " has invalid mode '", cr$mode, "'", call. = FALSE)
       if (cr$mode != "manual" && is.null(cr$check))
         stop("Criterion ", cr$id, " is ", cr$mode, " but has no `check`", call. = FALSE)
+      unknown <- setdiff(unlist(cr$analyses), names(cfg$analyses))
+      if (length(unknown))
+        stop("Criterion ", cr$id, " references unknown analyses: ", paste(unknown, collapse = ", "), call. = FALSE)
     }
   }
   invisible(TRUE)
@@ -169,4 +194,22 @@ wt_read_users <- function(path = Sys.getenv("WT_USERS_PATH", "")) {
   users <- utils::read.csv(path, stringsAsFactors = FALSE, na.strings = "", encoding = "UTF-8")
   users$authority[is.na(users$authority)] <- ""
   users
+}
+
+#' Analyses referenced by gate criteria, as a data frame
+#'
+#' One row per (gate, criterion, analysis) link. This is how a process
+#' "calls" catalog analyses.
+#' @param cfg Config list.
+#' @export
+wt_criterion_analyses <- function(cfg) {
+  rows <- list()
+  for (g in names(cfg$decisions)) for (cr in cfg$decisions[[g]]$criteria) for (a in unlist(cr$analyses)) {
+    rows[[length(rows) + 1]] <- data.frame(gate = g, criterion_id = cr$id, criterion = cr$label,
+                                           classes = paste(unlist(cr$classes), collapse = ","),
+                                           analysis_id = a, stringsAsFactors = FALSE)
+  }
+  if (!length(rows)) return(data.frame(gate = character(), criterion_id = character(), criterion = character(),
+                                       classes = character(), analysis_id = character()))
+  do.call(rbind, rows)
 }

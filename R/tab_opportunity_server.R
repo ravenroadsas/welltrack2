@@ -220,6 +220,7 @@ tab_opportunity_server <- function(id, app) {
     output$gates <- shiny::renderUI({
       c0 <- ctx(); o <- c0$opp
       can_edit <- wt_can(app$user(), "edit_case", cfg)
+      links <- wt_case_analyses(c0, cfg)
       cards <- lapply(names(cfg$decisions), function(g) {
         ev <- wt_evaluate_gate(c0, g, cfg)
         dec <- c0$decisions[c0$decisions$gate == g & !c0$decisions$superseded, , drop = FALSE]
@@ -236,8 +237,14 @@ tab_opportunity_server <- function(id, app) {
               onclick = sprintf("Shiny.setInputValue('%s', {gate:'%s', id:'%s', met:%s, n:Math.random()})",
                                 ns("crit_toggle"), g, r$id, tolower(!r$confirmed)),
               if (r$confirmed) "undo" else if (r$status == "suggested") "confirm" else "mark met")
+            ln <- links[links$gate == g & links$criterion_id == r$id, , drop = FALSE]
+            analyze <- if (nrow(ln)) htmltools::tags$button(
+              class = "btn btn-xs wt-crit-btn wt-analyze", title = paste("Analyses:", paste(ln$name, collapse = ", ")),
+              onclick = sprintf("Shiny.setInputValue('%s', {a:'%s', c:'%s', g:'%s', go:true, n:Math.random()})",
+                                ns("an_pick"), ln$analysis_id[1], r$id, g),
+              shiny::icon(if (any(ln$evidence_status == "submitted")) "paperclip" else "chart-line"), "Analyze")
             htmltools::tags$tr(htmltools::tags$td(wt_status_chip(r$status)), htmltools::tags$td(r$label),
-                               htmltools::tags$td(wt_mode_icon(r$mode)), htmltools::tags$td(toggle))
+                               htmltools::tags$td(wt_mode_icon(r$mode)), htmltools::tags$td(analyze, toggle))
           })),
           if (nrow(dec)) htmltools::div(class = "wt-decision-rec",
             htmltools::strong(dec$outcome[1]), " by ", dec$decided_by[1], " on ", format(dec$decided_at[1], "%Y-%m-%d"),
@@ -255,6 +262,102 @@ tab_opportunity_server <- function(id, app) {
       app$bump()
     })
     shiny::observeEvent(input$goto_decide, app$open_tab("decisions"))
+
+    # --- analysis workbench ----------------------------------------------------------
+    # One sub-tab hosts every analysis; the list comes from the process config
+    # (criteria `analyses:`) and the catalog, so new analyses add no tabs.
+    registry <- wt_analysis_registry()
+    an_results <- stats::setNames(lapply(names(registry), function(a) registry[[a]]$server(paste0("an_", a), ctx)),
+                                  names(registry))
+    an_links <- shiny::reactive(wt_case_analyses(ctx(), cfg))
+    an_sel <- shiny::reactiveVal(NULL)
+
+    shiny::observeEvent(an_links(), {
+      l <- an_links(); cur <- an_sel()
+      keep <- !is.null(cur) && any(l$analysis_id == cur$a & l$criterion_id == cur$c)
+      if (!keep) an_sel(if (nrow(l)) list(a = l$analysis_id[1], c = l$criterion_id[1], g = l$gate[1]) else NULL)
+    })
+    shiny::observeEvent(input$an_pick, {
+      x <- input$an_pick
+      an_sel(list(a = x$a, c = x$c, g = x$g))
+      if (isTRUE(x$go)) bslib::nav_select("tabs", "analysis", session = session)
+    })
+
+    output$an_list <- shiny::renderUI({
+      l <- an_links(); cur <- an_sel()
+      if (!nrow(l)) return(wt_callout("No analyses configured", type = "neutral", "No gate criterion of this process references an analysis for this class."))
+      htmltools::tagList(
+        htmltools::div(class = "wt-section", "Analyses for this case"),
+        lapply(seq_len(nrow(l)), function(i) {
+          active <- !is.null(cur) && cur$a == l$analysis_id[i] && cur$c == l$criterion_id[i]
+          htmltools::div(
+            class = paste("wt-an-item", if (active) "active", if (l$current_gate[i]) "wt-an-current"),
+            onclick = sprintf("Shiny.setInputValue('%s', {a:'%s', c:'%s', g:'%s', n:Math.random()})",
+                              ns("an_pick"), l$analysis_id[i], l$criterion_id[i], l$gate[i]),
+            htmltools::div(class = "wt-an-name", shiny::icon(if (l$kind[i] == "module") "chart-line" else "up-right-from-square"), l$name[i]),
+            htmltools::div(class = "wt-an-crit", wt_badge(l$gate[i], if (l$current_gate[i]) "warn" else "neutral"), l$criterion[i]),
+            htmltools::div(if (l$evidence_status[i] == "submitted")
+              htmltools::span(class = "wt-an-ev", shiny::icon("paperclip"), "evidence ", format(l$evidence_at[i], "%Y-%m-%d"))
+              else htmltools::span(class = "wt-hint", "no evidence yet")))
+        }),
+        htmltools::div(class = "wt-hint", style = "margin-top:6px", "Current gate first. Analyses come from the shared catalog (analyses.yml).")
+      )
+    })
+
+    output$an_workspace <- shiny::renderUI({
+      cur <- an_sel(); shiny::req(cur)
+      a <- cfg$analyses[[cur$a]]
+      head <- htmltools::div(class = "wt-section", a$name, htmltools::span(class = "wt-hint", paste0("v", a$version, " \u00b7 ", a$kind)))
+      if (a$kind == "module" && cur$a %in% names(registry)) {
+        return(htmltools::tagList(head, htmltools::div(class = "wt-hint", a$description), registry[[cur$a]]$ui(ns(paste0("an_", cur$a)))))
+      }
+      link <- wt_analysis_link(a, opp()$opp_id, cur$c)
+      htmltools::tagList(head,
+        wt_callout("Runs in a separate application", type = "info", a$description,
+          htmltools::div(style = "margin-top:6px",
+            htmltools::tags$a(class = "btn btn-sm btn-primary", href = link, target = "_blank", shiny::icon("up-right-from-square"), " Open ", a$name)),
+          htmltools::div(class = "wt-hint", style = "margin-top:4px", "Deep link carries case and criterion: ", htmltools::code(link)),
+          htmltools::div(class = "wt-hint", "The app writes its evidence record back to WellTrack; it then appears here and in the gate.")),
+        wt_callout("Mockup", type = "neutral", "The external app is a placeholder: the link target does not exist yet."))
+    })
+
+    output$an_attach <- shiny::renderUI({
+      cur <- an_sel(); shiny::req(cur)
+      a <- cfg$analyses[[cur$a]]
+      crit <- an_links()[an_links()$analysis_id == cur$a & an_links()$criterion_id == cur$c, , drop = FALSE]
+      ev <- ctx()$evidence
+      ev <- if (is.null(ev)) NULL else ev[ev$analysis_id == cur$a & ev$criterion_id == cur$c & ev$status == "submitted", , drop = FALSE]
+      labels <- stats::setNames(vapply(a$outputs, `[[`, "", "label"), vapply(a$outputs, `[[`, "", "id"))
+      units <- stats::setNames(vapply(a$outputs, function(x) x$unit %||% "", ""), vapply(a$outputs, `[[`, "", "id"))
+      res <- if (a$kind == "module" && cur$a %in% names(an_results)) an_results[[cur$a]]() else NULL
+      can_run <- wt_can_run_analysis(app$user(), a, cfg)
+      htmltools::tagList(
+        htmltools::div(class = "wt-section", "Evidence for"),
+        htmltools::div(class = "wt-an-crit", wt_badge(cur$g, "warn"), htmltools::strong(crit$criterion[1])),
+        if (!is.null(res) && is.null(res$error)) htmltools::tagList(
+          htmltools::tags$table(class = "wt-mini", lapply(names(res$outputs), function(k) htmltools::tags$tr(
+            htmltools::tags$td(labels[[k]] %||% k), htmltools::tags$td(paste(format(res$outputs[[k]], big.mark = ","), units[[k]] %||% ""))))),
+          htmltools::div(class = "wt-hint", "Data: ", res$data_ref),
+          if (can_run) htmltools::div(style = "margin-top:6px", htmltools::span(class = "wt-live", "LIVE"),
+            shiny::actionButton(ns("an_submit"), "Submit as evidence", icon = shiny::icon("paperclip"), class = "btn-sm btn-warning"))
+          else htmltools::div(class = "wt-hint", "Submitting requires the integrator role or one of: ", paste(unlist(a$disciplines), collapse = ", "))),
+        htmltools::div(class = "wt-section", "Attached evidence"),
+        if (is.null(ev) || !nrow(ev)) htmltools::div(class = "wt-hint", "None yet.")
+        else lapply(seq_len(nrow(ev)), function(i) htmltools::div(class = "wt-decision-rec",
+          htmltools::strong(format(ev$created_at[i], "%Y-%m-%d")), " by ", ev$created_by[i], htmltools::br(),
+          ev$summary[i], htmltools::div(class = "wt-hint", ev$data_ref[i], " \u00b7 ", ev$evidence_id[i])))
+      )
+    })
+
+    shiny::observeEvent(input$an_submit, {
+      cur <- an_sel(); shiny::req(cur)
+      res <- an_results[[cur$a]]()
+      shiny::req(is.null(res$error))
+      rec <- wt_evidence_record(opp()$opp_id, cur$g, cur$c, cfg$analyses[[cur$a]], res, app$user()$user)
+      wt_db_add_evidence(app$con, rec)
+      app$bump()
+      shiny::showNotification(sprintf("Evidence attached to %s \u2014 gate readiness recalculated", cur$g), type = "message")
+    })
 
     # --- readiness ---------------------------------------------------------------
     output$readiness <- shiny::renderUI({

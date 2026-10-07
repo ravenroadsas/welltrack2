@@ -16,7 +16,9 @@ make_ctx <- function(...) {
     risks = data.frame(probability = numeric(), consequence = numeric(), mitigation = character(), owner = character(), status = character()),
     decisions = data.frame(gate = character(), outcome = character(), superseded = logical()),
     gate_checks = data.frame(gate = character(), criterion_id = character(), status = character()),
-    changes = data.frame(materiality = character(), status = character())
+    changes = data.frame(materiality = character(), status = character()),
+    evidence = data.frame(analysis_id = "decline_curve", criterion_id = "d2_baseline", gate = "D2", status = "submitted",
+                          created_at = Sys.time(), stringsAsFactors = FALSE)
   )
 }
 

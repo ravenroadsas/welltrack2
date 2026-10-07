@@ -59,6 +59,14 @@ tab_decisions_server <- function(id, app) {
                  if (wt_gate_readiness(ev) == 100) "ok" else "warn")),
         htmltools::tags$table(class = "wt-crit", lapply(seq_len(nrow(ev)), function(i) htmltools::tags$tr(
           htmltools::tags$td(wt_status_chip(ev$status[i])), htmltools::tags$td(ev$label[i]), htmltools::tags$td(wt_mode_icon(ev$mode[i]))))),
+        {
+          ev2 <- ctx$evidence
+          ev2 <- if (is.null(ev2)) NULL else ev2[ev2$gate == g & ev2$status == "submitted", , drop = FALSE]
+          if (!is.null(ev2) && nrow(ev2)) wt_callout(sprintf("%d analysis result(s) attached as evidence", nrow(ev2)), type = "info", icon = "paperclip",
+            htmltools::tags$ul(lapply(seq_len(nrow(ev2)), function(i) htmltools::tags$li(
+              htmltools::strong(cfg$analyses[[ev2$analysis_id[i]]]$name %||% ev2$analysis_id[i]), ": ", ev2$summary[i],
+              htmltools::span(class = "wt-hint", " (", ev2$created_by[i], ", ", format(ev2$created_at[i], "%Y-%m-%d"), ")")))))
+        },
         if (length(s$wpa)) wt_callout("Exceptions for discussion", type = "warn", htmltools::tags$ul(lapply(s$wpa, htmltools::tags$li))),
         if (nrow(ctx$risks)) {
           r <- ctx$risks[wt_risk_score(ctx$risks$probability, ctx$risks$consequence) >= 10 & ctx$risks$status != "closed", ]

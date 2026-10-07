@@ -63,6 +63,19 @@ wt_can_decide <- function(user, gate, class, cfg) {
   wt_can(user, "decide", cfg) && identical(user$authority, cfg$decisions[[gate]]$authority[[class]])
 }
 
+#' Can a user run an analysis and submit its evidence?
+#'
+#' Integrators always; contributors when their discipline is listed in the
+#' analysis catalog entry (`disciplines`).
+#' @param user Output of [wt_resolve_user()].
+#' @param analysis Catalog entry.
+#' @param cfg Config list.
+#' @export
+wt_can_run_analysis <- function(user, analysis, cfg) {
+  wt_can(user, "edit_case", cfg) ||
+    (wt_can(user, "edit_stream", cfg) && user$discipline %in% unlist(analysis$disciplines))
+}
+
 #' Can a user edit a discipline-owned item (assurance stream / readiness workstream)?
 #'
 #' Integrators can edit any item; contributors only items of their discipline.

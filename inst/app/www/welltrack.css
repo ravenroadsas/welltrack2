@@ -226,3 +226,14 @@ table.dataTable.wt-dt tbody tr { cursor: pointer; }
   .wt-opp-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .wt-stream-grid, .wt-form-grid { grid-template-columns: 1fr; }
 }
+
+/* --- analysis workbench ---------------------------------------------------- */
+.wt-an-item { border: 1px solid var(--wt-line); border-left: 3px solid var(--wt-muted); background: #fff; padding: 4px 6px; margin-bottom: 4px; cursor: pointer; font-size: 11px; }
+.wt-an-item:hover { border-color: var(--wt-primary); }
+.wt-an-item.wt-an-current { border-left-color: var(--wt-accent); }
+.wt-an-item.active { background: #eef4fb; border-color: var(--wt-primary); }
+.wt-an-name { font-weight: 700; display: flex; gap: 5px; align-items: center; }
+.wt-an-crit { display: flex; gap: 5px; align-items: center; margin: 2px 0; font-size: 10.5px; color: var(--wt-ink-2); }
+.wt-an-ev { color: var(--wt-ok); font-size: 10.5px; font-weight: 600; }
+.wt-analyze { margin-right: 3px; white-space: nowrap; }
+.wt-crit td:last-child { white-space: nowrap; }

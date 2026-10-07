@@ -10,6 +10,8 @@
 #   ctx$decisions   data.frame(gate, outcome, decided_at, superseded, ...)
 #   ctx$gate_checks data.frame(gate, criterion_id, status, ...)  manual/assisted confirmations
 #   ctx$changes     data.frame(materiality, status, ...)
+#   ctx$evidence    data.frame(analysis_id, criterion_id, status, outputs, ...)  analysis results
+#   ctx$production  data.frame(well, month, oil_bopd)  history of the case's well
 
 #' Evaluate a structured rule against a record
 #'
@@ -92,49 +94,57 @@ wt_risk_score <- function(probability, consequence) probability * consequence
 # Adding automation = adding a function here and referencing it in YAML.
 wt_check_registry <- function() {
   list(
-    framing_complete = function(ctx, cfg) {
+    framing_complete = function(ctx, cfg, check = NULL) {
       req <- Filter(function(f) isTRUE(f$required), cfg$framing_fields)
       all(vapply(req, function(f) wt_eval_rule(list(field = f$id, op = "not_null"), ctx$opp), logical(1)))
     },
-    well_context_available = function(ctx, cfg) {
+    well_context_available = function(ctx, cfg, check = NULL) {
       wt_eval_rule(list(field = "current_bopd", op = "not_null"), ctx$opp)
     },
-    required_streams_complete = function(ctx, cfg) {
+    required_streams_complete = function(ctx, cfg, check = NULL) {
       req <- wt_required_streams(ctx$opp, cfg)
       st <- ctx$streams[ctx$streams$stream_id %in% req, , drop = FALSE]
       length(req) > 0 && nrow(st) == length(req) && all(st$status == "complete")
     },
-    no_stream_conflicts = function(ctx, cfg) {
+    no_stream_conflicts = function(ctx, cfg, check = NULL) {
       !any(ctx$streams$status == "conflict")
     },
-    economics_consistent = function(ctx, cfg) {
+    economics_consistent = function(ctx, cfg, check = NULL) {
       a <- ctx$opp$econ_basis_bopd; b <- ctx$opp$realizable_bopd
       !is.null(a) && !is.null(b) && !is.na(a) && !is.na(b) && abs(a - b) < 1
     },
-    material_risks_mitigated = function(ctx, cfg) {
+    material_risks_mitigated = function(ctx, cfg, check = NULL) {
       r <- ctx$risks
       if (is.null(r) || !nrow(r)) return(TRUE)
       mat <- r[wt_risk_score(r$probability, r$consequence) >= 10, , drop = FALSE]
       all(nzchar(mat$mitigation %||% "") & nzchar(mat$owner %||% ""))
     },
-    d2_approved = function(ctx, cfg) {
+    d2_approved = function(ctx, cfg, check = NULL) {
       d <- ctx$decisions
       !is.null(d) && any(d$gate == "D2" & d$outcome %in% c("GO", "CONDITIONAL_GO") & !d$superseded)
     },
-    workstreams_complete = function(ctx, cfg) {
+    workstreams_complete = function(ctx, cfg, check = NULL) {
       app <- wt_applicable_workstreams(ctx$opp, cfg)
       ws <- ctx$workstreams[ctx$workstreams$ws_id %in% app, , drop = FALSE]
       nrow(ws) == length(app) && all(ws$status == "complete")
     },
-    critical_risks_closed = function(ctx, cfg) {
+    critical_risks_closed = function(ctx, cfg, check = NULL) {
       r <- ctx$risks
       if (is.null(r) || !nrow(r)) return(TRUE)
       crit <- r[wt_risk_score(r$probability, r$consequence) >= 15, , drop = FALSE]
       all(crit$status %in% c("closed", "accepted"))
     },
-    no_pending_material_change = function(ctx, cfg) {
+    no_pending_material_change = function(ctx, cfg, check = NULL) {
       ch <- ctx$changes
       is.null(ch) || !any(ch$status == "pending" & ch$materiality != "accept")
+    },
+    evidence_submitted = function(ctx, cfg, check = NULL) {
+      ev <- ctx$evidence
+      if (is.null(ev) || !nrow(ev)) return(FALSE)
+      hit <- ev$analysis_id == check$analysis & ev$status == "submitted"
+      # evidence counts only for the criterion it was attached to
+      if (!is.null(check$criterion)) hit <- hit & ev$criterion_id == check$criterion
+      any(hit)
     }
   )
 }
@@ -150,7 +160,7 @@ wt_run_check <- function(check, ctx, cfg) {
   if (!is.null(check$fn)) {
     fn <- wt_check_registry()[[check$fn]]
     if (is.null(fn)) stop("Unknown check function: ", check$fn, call. = FALSE)
-    return(isTRUE(fn(ctx, cfg)))
+    return(isTRUE(fn(ctx, cfg, check)))
   }
   wt_eval_rule(check, ctx$opp)
 }
@@ -168,7 +178,7 @@ wt_evaluate_gate <- function(ctx, gate, cfg) {
   crit <- Filter(function(c) ctx$opp$class %in% unlist(c$classes), cfg$decisions[[gate]]$criteria)
   gc <- ctx$gate_checks
   rows <- lapply(crit, function(c) {
-    auto <- if (c$mode == "manual") NA else wt_run_check(c$check, ctx, cfg)
+    auto <- if (c$mode == "manual") NA else wt_run_check(c(c$check, list(criterion = c$id)), ctx, cfg)
     confirmed <- !is.null(gc) && any(gc$gate == gate & gc$criterion_id == c$id & gc$status == "met")
     status <- switch(c$mode,
       auto = if (isTRUE(auto)) "met" else "open",
@@ -234,7 +244,7 @@ wt_apply_decision <- function(current_state, gate, outcome, cfg) {
 #' @param ctx Case context.
 #' @param cfg Config list.
 #' @export
-wt_wpa_triggers <- function(ctx, cfg) {
+wt_wpa_triggers <- function(ctx, cfg, check = NULL) {
   t <- cfg$wpa_triggers
   o <- ctx$opp
   reasons <- character()
@@ -272,7 +282,7 @@ wt_change_materiality <- function(cost_increase_pct = 0, target_reduction_pct = 
 #' @param cfg Config list.
 #' @return list(step, gate, readiness, blockers (data.frame), next_action, wpa)
 #' @export
-wt_status_summary <- function(ctx, cfg) {
+wt_status_summary <- function(ctx, cfg, check = NULL) {
   step <- wt_state_step(ctx$opp$state, cfg)
   gate <- if (is.na(step)) NA_character_ else wt_next_gate(step, cfg)
   blockers <- data.frame(item = character(), owner = character(), action = character(), stringsAsFactors = FALSE)

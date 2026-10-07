@@ -1,0 +1,47 @@
+# =============================================================================
+# WellTrack 2.0 - Analysis catalog
+# -----------------------------------------------------------------------------
+# Analyses are defined once here and referenced by id from any process config
+# (criteria `analyses: [...]`). Think of each entry as a function signature:
+#   inputs  -> case fields / data sources the analysis needs
+#   outputs -> evidence values it produces (stored with the evidence record)
+#
+# kind:
+#   module    runs inside WellTrack (R function + Shiny module in the package,
+#             looked up by `id` in wt_analysis_registry())
+#   app       separate app on Posit Connect, opened with a deep link; it writes
+#             the evidence record back to the shared database / API
+#   report    scheduled report (Quarto on Connect); latest run is linked
+#   external  specialist tool (PROSPER, OFM...); result entered + file attached
+# =============================================================================
+
+version: "0.1.0"
+
+analyses:
+  - id: decline_curve
+    name: Production history & decline
+    kind: module
+    version: "1.0"
+    description: Fit an exponential or harmonic decline to recent oil-rate history and forecast the next 12 months without intervention.
+    inputs:
+      case: [well, current_bopd]
+      data: [production_history]
+    outputs:
+      - {id: qi_bopd,        label: Initial rate of fit,          unit: bopd}
+      - {id: decline_pct_yr, label: Annual decline,               unit: "%/yr"}
+      - {id: forecast_12m_bbl, label: 12-month baseline volume,   unit: bbl}
+      - {id: r2,             label: Fit quality (R2),             unit: ""}
+    disciplines: [Reservoir, Production, Surveillance]
+
+  - id: nodal_quicklook
+    name: Nodal quick-look (inflow / outflow)
+    kind: app
+    version: "0.9"
+    description: Inflow/outflow analysis to confirm the achievable operating point. Runs in the dedicated Nodal app.
+    url: "https://connect.example.com/nodal/"     # placeholder until the app exists
+    inputs:
+      case: [well, reservoir_bopd, artificial_lift]
+      data: [well_tests, completion]
+    outputs:
+      - {id: operating_point_bopd, label: Operating point, unit: bopd}
+    disciplines: [Production, ALS]

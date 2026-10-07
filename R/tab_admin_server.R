@@ -53,6 +53,18 @@ tab_admin_server <- function(id, app) {
                data.frame(Kind = "Readiness (S4)", Id = w$id, Name = w$name, Discipline = w$discipline)))
     })
 
+    output$analyses <- DT::renderDT({
+      a <- cfg$analyses
+      used <- wt_criterion_analyses(cfg)
+      dt(data.frame(
+        Id = names(a), Name = vapply(a, `[[`, "", "name"), Kind = vapply(a, `[[`, "", "kind"),
+        Version = vapply(a, function(x) x$version %||% "", ""),
+        Outputs = vapply(a, function(x) paste(vapply(x$outputs, `[[`, "", "id"), collapse = ", "), ""),
+        Disciplines = vapply(a, function(x) paste(unlist(x$disciplines), collapse = ", "), ""),
+        `Used by criteria` = vapply(names(a), function(i) paste(paste0(used$gate, " ", used$criterion_id)[used$analysis_id == i], collapse = "; "), ""),
+        check.names = FALSE))
+    })
+
     output$roles <- DT::renderDT({
       perms <- unique(unlist(lapply(cfg$roles, `[[`, "permissions")))
       m <- t(vapply(cfg$roles, function(r) ifelse(perms %in% unlist(r$permissions), "\u2714", ""), character(length(perms))))

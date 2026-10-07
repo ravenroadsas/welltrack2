@@ -223,6 +223,8 @@ wt_mock_data <- function(cfg, n = 48, seed = 42, now = as.POSIXct("2026-10-07 08
   }
 
   opp_df <- do.call(rbind, lapply(opps, function(r) as.data.frame(r, stringsAsFactors = FALSE)))
+  prod <- wt_mock_production(opp_df, now)
+  evid <- wt_mock_evidence(cfg, opp_df, prod, steps, now)
   bind <- function(x) if (length(x)) do.call(rbind, x) else data.frame()
   list(
     opportunity = opp_df,
@@ -233,6 +235,8 @@ wt_mock_data <- function(cfg, n = 48, seed = 42, now = as.POSIXct("2026-10-07 08
     decision = bind(decs),
     gate_check = bind(gchk),
     change_request = bind(chg),
+    production_history = prod,
+    evidence = evid,
     activity_log = wt_mock_activity(cfg, opp_df, users, now)
   )
 }
@@ -254,5 +258,49 @@ wt_mock_activity <- function(cfg, opps, users, now) {
       input_id = ids, value = "", opp_id = sample(opps$opp_id, 1),
       phase = wt_map_activity_phase(ids, cfg), stringsAsFactors = FALSE)
   })
+  do.call(rbind, rows)
+}
+
+#' Mock monthly oil-rate history per producing well (36 months)
+#'
+#' Exponential decline with noise and occasional downtime months, ending at
+#' the well's current rate. New wells (current rate 0) have no history.
+#' @keywords internal
+wt_mock_production <- function(opps, now) {
+  wells <- opps[!duplicated(opps$well) & opps$current_bopd > 0, c("well", "current_bopd")]
+  end <- as.Date(format(as.Date(now), "%Y-%m-01"))
+  months <- seq(end, by = "-1 month", length.out = 36)[36:1]
+  do.call(rbind, lapply(seq_len(nrow(wells)), function(i) {
+    d <- stats::runif(1, .12, .45)
+    t_left <- as.numeric(end - months) / 365.25
+    q <- wells$current_bopd[i] * exp(d * t_left) * stats::rlnorm(36, 0, .06)
+    q[stats::runif(36) < .05] <- 0
+    data.frame(well = wells$well[i], month = months, oil_bopd = round(q, 1), stringsAsFactors = FALSE)
+  }))
+}
+
+#' Mock evidence: decline analyses already attached to cases past D1
+#' @keywords internal
+wt_mock_evidence <- function(cfg, opps, prod, steps, now) {
+  links <- wt_criterion_analyses(cfg)
+  links <- links[links$analysis_id == "decline_curve", ]
+  rows <- list()
+  for (i in seq_len(nrow(opps))) {
+    o <- opps[i, ]
+    pos <- match(o$step_id, steps$id)
+    for (j in seq_len(nrow(links))) {
+      gpos <- match(links$gate[j], steps$id)
+      if (!o$class %in% strsplit(links$classes[j], ",")[[1]]) next
+      if (gpos > pos || (gpos == pos && stats::runif(1) < .5)) next
+      p <- prod[prod$well == o$well, ]
+      res <- tryCatch(wt_an_decline_fit(p, 12, "exponential"), error = function(e) NULL)
+      if (is.null(res)) next
+      rows[[length(rows) + 1]] <- wt_evidence_record(o$opp_id, links$gate[j], links$criterion_id[j],
+                                                     cfg$analyses$decline_curve, res, "ana.rmt",
+                                                     now - stats::runif(1, 1, 60) * 86400)
+    }
+  }
+  if (!length(rows)) return(wt_evidence_record("x", "x", "x", cfg$analyses$decline_curve,
+                                               list(params = list(), outputs = list()), "x", now)[0, ])
   do.call(rbind, rows)
 }

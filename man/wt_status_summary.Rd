@@ -4,7 +4,7 @@
 \alias{wt_status_summary}
 \title{Decision-centric status summary for a case}
 \usage{
-wt_status_summary(ctx, cfg)
+wt_status_summary(ctx, cfg, check = NULL)
 }
 \arguments{
 \item{ctx}{Case context.}

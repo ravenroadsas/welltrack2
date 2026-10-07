@@ -4,11 +4,18 @@
 \alias{wt_load_config}
 \title{Load the process configuration}
 \usage{
-wt_load_config(path = Sys.getenv("WT_CONFIG_PATH", ""))
+wt_load_config(
+  path = Sys.getenv("WT_CONFIG_PATH", ""),
+  analyses_path = Sys.getenv("WT_ANALYSES_PATH", "")
+)
 }
 \arguments{
 \item{path}{YAML file. Defaults to env var \code{WT_CONFIG_PATH}, else the
 packaged \code{inst/config/process.yml}.}
+
+\item{analyses_path}{Analysis catalog YAML. Defaults to env var
+\code{WT_ANALYSES_PATH}, else the packaged \code{inst/config/analyses.yml}. The
+catalog is shared by all processes and attached as \code{cfg$analyses}.}
 }
 \value{
 A validated list.

@@ -26,7 +26,7 @@ wt_db_disconnect <- function(con) {
 #' @export
 wt_db_tables <- function() {
   c("opportunity", "step_history", "stream_status", "workstream_status", "risk",
-    "decision", "gate_check", "change_request", "activity_log")
+    "decision", "gate_check", "change_request", "activity_log", "production_history", "evidence")
 }
 
 #' Seed the database from a list of data frames (mockup / tests)
@@ -175,6 +175,23 @@ wt_db_record_decision <- function(con, opp_id, gate, outcome, user, rationale, c
     }
   })
   new_state
+}
+
+#' Store an analysis evidence record
+#'
+#' Earlier submitted evidence of the same analysis for the same criterion is
+#' marked `superseded` (kept for traceability).
+#' @param con DBI connection.
+#' @param record One-row data.frame from [wt_evidence_record()].
+#' @export
+wt_db_add_evidence <- function(con, record) {
+  DBI::dbWithTransaction(con, {
+    DBI::dbExecute(con, "UPDATE evidence SET status = 'superseded'
+                         WHERE opp_id = ? AND criterion_id = ? AND analysis_id = ? AND status = 'submitted'",
+                   params = list(record$opp_id, record$criterion_id, record$analysis_id))
+    DBI::dbAppendTable(con, "evidence", record)
+  })
+  invisible(record$evidence_id)
 }
 
 #' Append raw activity events

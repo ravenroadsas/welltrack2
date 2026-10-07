@@ -4,7 +4,7 @@
 \alias{wt_wpa_triggers}
 \title{Reasons that require a formal WPA meeting (empty = asynchronous approval)}
 \usage{
-wt_wpa_triggers(ctx, cfg)
+wt_wpa_triggers(ctx, cfg, check = NULL)
 }
 \arguments{
 \item{ctx}{Case context.}

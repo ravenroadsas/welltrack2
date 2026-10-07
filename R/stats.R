@@ -16,9 +16,11 @@ wt_case_context <- function(data, opp_id) {
   }
   opp <- data$opportunity[data$opportunity$opp_id == opp_id, , drop = FALSE]
   if (!nrow(opp)) stop("Unknown opportunity ", opp_id, call. = FALSE)
+  prod <- data$production_history
   list(opp = as.list(opp), streams = pick("stream_status"), workstreams = pick("workstream_status"),
        risks = pick("risk"), decisions = pick("decision"), gate_checks = pick("gate_check"),
-       changes = pick("change_request"), history = pick("step_history"))
+       changes = pick("change_request"), history = pick("step_history"), evidence = pick("evidence"),
+       production = if (is.null(prod)) NULL else prod[prod$well == opp$well, , drop = FALSE])
 }
 
 #' Duration of every step occurrence

@@ -18,7 +18,9 @@ tab_admin_ui <- function(id) {
                          echarts4r::echarts4rOutput(ns("automation"), height = "130px"), DT::DTOutput(ns("criteria")))),
         bslib::layout_columns(col_widths = c(6, 6),
           htmltools::div(htmltools::div(class = "wt-section", "Complexity classes"), DT::DTOutput(ns("classes"))),
-          htmltools::div(htmltools::div(class = "wt-section", "Assurance streams & readiness workstreams"), DT::DTOutput(ns("streams"))))
+          htmltools::div(htmltools::div(class = "wt-section", "Assurance streams & readiness workstreams"), DT::DTOutput(ns("streams")))),
+        htmltools::div(class = "wt-section", "Analysis catalog (shared by all processes) and where this process uses it"),
+        DT::DTOutput(ns("analyses"))
       ),
       bslib::nav_panel("Account types & users",
         htmltools::div(class = "wt-section", "Account types (roles) and permissions"), DT::DTOutput(ns("roles")),

@@ -12,6 +12,11 @@
 #   auto      -> the app evaluates it from data (structured `check`)
 # Promoting a criterion from manual -> assisted -> auto is a config change.
 #
+# A criterion may list `analyses: [id, ...]` from inst/config/analyses.yml:
+# the app then offers those analyses on the criterion ("Analyze") and stores
+# their results as evidence. `check: {fn: evidence_submitted, analysis: id}`
+# makes the criterion met once that evidence is submitted.
+#
 # Items flagged `# TBV` are "To Be Validated" by the business (doc section 40).
 # =============================================================================
 
@@ -148,7 +153,7 @@ decisions:
       - {id: d1_defined,   label: Opportunity clearly defined,                 mode: auto,     classes: [A, B, C], check: {fn: framing_complete}}
       - {id: d1_benefit,   label: Potential benefit exists,                    mode: auto,     classes: [A, B, C], check: {field: reservoir_bopd, op: ">", value: 0}}
       - {id: d1_fatal,     label: No obvious fatal flaw,                       mode: manual,   classes: [A, B, C]}
-      - {id: d1_info,      label: Sufficient information to begin assurance,   mode: assisted, classes: [B, C],    check: {fn: well_context_available}}
+      - {id: d1_info,      label: Sufficient information to begin assurance,   mode: assisted, classes: [B, C],    check: {fn: well_context_available}, analyses: [decline_curve]}
       - {id: d1_priority,  label: Consistent with asset priorities,            mode: manual,   classes: [B, C]}
   D2:
     authority: {A: Asset Manager, B: Asset Manager, C: VP Operations}   # TBV, by value/risk
@@ -160,7 +165,8 @@ decisions:
       RECYCLE_TECHNICAL_CASE: RECYCLE_TECHNICAL_CASE
     criteria:
       - {id: d2_streams,     label: All required assurance streams complete,          mode: auto,     classes: [A, B, C], check: {fn: required_streams_complete}}
-      - {id: d2_realizable,  label: Realizable potential defined (and gap explained),  mode: auto,     classes: [A, B, C], check: {field: realizable_bopd, op: ">", value: 0}}
+      - {id: d2_realizable,  label: Realizable potential defined (and gap explained),  mode: auto,     classes: [A, B, C], check: {field: realizable_bopd, op: ">", value: 0}, analyses: [nodal_quicklook]}
+      - {id: d2_baseline,    label: Production baseline analysed (decline evidence),   mode: auto,     classes: [B, C],    check: {fn: evidence_submitted, analysis: decline_curve}, analyses: [decline_curve]}
       - {id: d2_no_conflict, label: No open discipline conflicts,                      mode: auto,     classes: [B, C],    check: {fn: no_stream_conflicts}}
       - {id: d2_cost,        label: Cost estimate with uncertainty range,              mode: auto,     classes: [A, B, C], check: {field: cost_kusd, op: ">", value: 0}}
       - {id: d2_econ,        label: "Economics evaluated (NPV, IRR, payout)",            mode: auto,     classes: [B, C],    check: {field: npv_kusd, op: not_null}}
